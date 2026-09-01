@@ -73,12 +73,18 @@ foreach (array_filter(array_map('trim', explode(',', (string) $this->themeSettin
 }
 
 // Back link (theme settings; default: the site's first Faceted Browse page).
+//
+// rtrim before joining: when Clean Url is set to skip the main site's prefix,
+// currentSite()->url() is "/" rather than "/s/<slug>", so a plain concatenation
+// gives "//faceted-browse/1". Under a base path that is a harmless double slash
+// mid-URL; at a domain root it is a PROTOCOL-RELATIVE url, and the browser
+// reads "faceted-browse" as the host - which is what production did.
 $backLabel = $this->themeSetting('back_link_label', 'Back to the catalogue');
 $backUrl = trim((string) $this->themeSetting('back_link_url', ''));
 if ($backUrl === '') {
-    $backUrl = $this->currentSite()->url() . '/faceted-browse/1';
+    $backUrl = rtrim($this->currentSite()->url(), '/') . '/faceted-browse/1';
 } elseif (!preg_match('~^(https?:)?/~', $backUrl)) {
-    $backUrl = $this->currentSite()->url() . '/' . ltrim($backUrl, '/');
+    $backUrl = rtrim($this->currentSite()->url(), '/') . '/' . ltrim($backUrl, '/');
 }
 
 // Contextual back link: when the reader crossed into this record FROM one of

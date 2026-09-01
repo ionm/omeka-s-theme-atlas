@@ -95,7 +95,7 @@ class AtlasFacetLinks extends AbstractHelper
             $category = reset($categories);
             $this->categoryId = $category->id();
             $this->joiner = ('or' === $category->valueFacetMode()) ? 'or' : 'and';
-            $this->pageUrl = $site->url() . '/faceted-browse/' . $page->id();
+            $this->pageUrl = rtrim($site->url(), '/') . '/faceted-browse/' . $page->id();
 
             foreach ($category->facets() as $facet) {
                 if ($facet->type() !== 'value') {

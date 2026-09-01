@@ -10,9 +10,9 @@ $buttonLabel = $this->themeSetting('hero_button_label', 'Browse the collection')
 $buttonUrl = trim((string) $this->themeSetting('back_link_url', ''));
 $site = $this->currentSite();
 if ($buttonUrl === '') {
-    $buttonUrl = $site->url() . '/faceted-browse/1';
+    $buttonUrl = rtrim($site->url(), '/') . '/faceted-browse/1';
 } elseif (!preg_match('~^(https?:)?/~', $buttonUrl)) {
-    $buttonUrl = $site->url() . '/' . ltrim($buttonUrl, '/');
+    $buttonUrl = rtrim($site->url(), '/') . '/' . ltrim($buttonUrl, '/');
 }
 ?>
 <div class="atlas-hero">
