@@ -1,0 +1,17 @@
+<?php
+/**
+ * Atlas override of FacetedBrowse's default item results: one entry card per
+ * item, laid out as list rows (default) or a grid of plates (?view=grid).
+ *
+ * Both views render the same partial - common/atlas/entry-card - so the
+ * information (title, context line, facet tags, plate/placeholder) cannot
+ * drift apart; only the wrapper class changes, and the layouts live in CSS.
+ */
+$view = ('grid' === $this->params()->fromQuery('view')) ? 'grid' : 'list';
+$thumbnailType = $page->thumbnailType() ?: 'large';
+?>
+<div class="atlas-entries is-<?php echo $view; ?>">
+<?php foreach ($items as $item): ?>
+    <?php echo $this->partial('common/atlas/entry-card', ['item' => $item, 'thumbnailType' => $thumbnailType]); ?>
+<?php endforeach; ?>
+</div>

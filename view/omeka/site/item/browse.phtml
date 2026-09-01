@@ -1,0 +1,45 @@
+<?php
+$translate = $this->plugin('translate');
+$escape = $this->plugin('escapeHtml');
+$this->htmlElement('body')->appendAttribute('class', 'item resource browse');
+$filterLocale = (bool) $this->siteSetting('filter_locale_values');
+$valueLang = $filterLocale ? [$this->lang(), ''] : null;
+
+$query = $this->params()->fromQuery();
+$itemSetShow = isset($itemSet);
+if ($itemSetShow):
+    $this->headLink()->appendStylesheet($this->assetUrl('css/resource-page-blocks.css', 'Omeka'));
+    $this->htmlElement('body')->appendAttribute('class', 'item-set');
+    $query['item_set_id'] = $itemSet->id();
+endif;
+?>
+<div class="atlas-page">
+<?php if ($itemSetShow): ?>
+    <?php echo $this->pageTitle($itemSet->displayTitle(null, $valueLang), 2); ?>
+    <div class="atlas-item-set-blocks">
+        <?php echo $this->resourcePageBlocks($itemSet)->getBlocks(); ?>
+    </div>
+<?php else: ?>
+    <?php echo $this->pageTitle($translate('Items'), 2); ?>
+<?php endif; ?>
+
+<?php echo $this->searchFilters(); ?>
+
+<div class="browse-controls atlas-controls">
+    <?php echo $this->pagination(); ?>
+    <span class="atlas-controls-spacer"></span>
+    <?php echo $this->browse()->renderSortSelector('items'); ?>
+    <?php echo $this->hyperlink($translate('Advanced search'), $this->url('site/resource', ['controller' => 'item', 'action' => 'search'], ['query' => $query], true), ['class' => 'advanced-search atlas-button is-small']); ?>
+</div>
+
+<?php $this->trigger('view.browse.before'); ?>
+<div class="atlas-entries">
+<?php foreach ($items as $item): ?>
+    <?php echo $this->partial('common/atlas/entry-card', ['item' => $item]); ?>
+<?php endforeach; ?>
+</div>
+<?php $this->trigger('view.browse.after'); ?>
+<div class="browse-controls atlas-controls is-bottom">
+    <?php echo $this->pagination(); ?>
+</div>
+</div>

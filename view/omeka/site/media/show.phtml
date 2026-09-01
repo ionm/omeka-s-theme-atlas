@@ -1,0 +1,35 @@
+<?php
+/**
+ * Media page: the file on a plate, its metadata, and the parent entry.
+ */
+$translate = $this->plugin('translate');
+$escape = $this->plugin('escapeHtml');
+$item = $media->item();
+$this->headLink()->appendStylesheet($this->assetUrl('css/resource-page-blocks.css', 'Omeka'));
+$this->htmlElement('body')->appendAttribute('class', 'media resource show');
+$filterLocale = (bool) $this->siteSetting('filter_locale_values');
+$valueLang = $filterLocale ? [$this->lang(), ''] : null;
+
+$blocks = $this->resourcePageBlocks($media)->getBlocksArray();
+$renderBlock = $blocks['mediaRender'] ?? null;
+unset($blocks['mediaRender']);
+?>
+<article class="atlas-page atlas-entry-page">
+    <p class="atlas-back"><a href="<?php echo $escape($item->siteUrl()); ?>">‹ <?php echo $escape(sprintf($translate('Back to %s'), $item->displayTitle(null, $valueLang))); ?></a></p>
+    <div class="atlas-entry-grid">
+        <div class="atlas-entry-specimen">
+            <figure class="atlas-plate is-primary">
+                <?php echo $renderBlock ?: $media->render(); ?>
+                <figcaption><?php echo $escape($media->displayTitle(null, $valueLang)); ?></figcaption>
+            </figure>
+        </div>
+        <div class="atlas-entry-main">
+            <?php echo $this->pageTitle($media->displayTitle(null, $valueLang), 2); ?>
+            <?php $this->trigger('view.show.before'); ?>
+            <div class="atlas-show-blocks">
+                <?php echo implode('', $blocks); ?>
+            </div>
+            <?php $this->trigger('view.show.after'); ?>
+        </div>
+    </div>
+</article>

@@ -1,0 +1,17 @@
+<?php
+/**
+ * Theme rendering of the module's "Atlas statistics" block: a hairline-topped
+ * row of oxblood serif figures with caps labels.
+ */
+$escape = $this->plugin('escapeHtml');
+?>
+<?php if ($figures): ?>
+<div class="atlas-stats">
+    <?php foreach ($figures as $figure): ?>
+    <div class="atlas-stat">
+        <span class="atlas-stat-value"><?php echo $escape($figure['value']); ?></span>
+        <span class="atlas-stat-label"><?php echo $escape($figure['label']); ?></span>
+    </div>
+    <?php endforeach; ?>
+</div>
+<?php endif; ?>

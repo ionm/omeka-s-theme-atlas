@@ -1,0 +1,103 @@
+<?php
+/**
+ * Essay figure: one or more specimen plates at one of the three essay widths.
+ *
+ * Rendered by the three Media-block templates (atlas-figure-margin /
+ * -text / -page). The block layout is core's "Media embed", so authoring is
+ * core's attachment form: pick an item, optionally a specific media, optionally
+ * write a caption note. The WIDTH is the block template - never inferred from
+ * the image - which is the whole reason there are three templates and not one
+ * with an option.
+ *
+ * Variables: $attachments (block attachments), $variant ('margin'|'text'|
+ * 'page'), $valueLang (optional).
+ *
+ * Captions are GENERATED from the record - "Title, date." - exactly as the
+ * entry pages' specimen column generates them, so an essay figure and the same
+ * image on its catalogue page are captioned identically. A caption written on
+ * the attachment REPLACES that line entirely (plain text: it is one mono line,
+ * not prose).
+ *
+ * The caption is a LINK to that record's page - the plate itself is the
+ * expand control, so the reader reaches the catalogue entry through the words
+ * and not through a second affordance beside them.
+ *
+ * Proxy media created by AtomicClocksPresentation are resolved to their source
+ * media here too, for the same reason as on entry pages: proxies are plumbing,
+ * and their derivatives are thumbnails. When a proxy resolves into a different
+ * documentation item, that item's title and date caption the plate - it is the
+ * record the reader is actually looking at.
+ *
+ * @see themes/atlas/view/common/atlas/specimen.phtml
+ * @see themes/atlas/view/common/atlas/plate.phtml
+ */
+$valueLang = $valueLang ?? null;
+$variant = in_array(($variant ?? 'text'), ['margin', 'text', 'page'], true) ? $variant : 'text';
+
+$captionOf = function ($resource) use ($valueLang) {
+    $date = $resource->value('dcterms:issued', ['lang' => $valueLang])
+        ?: $resource->value('dcterms:date', ['lang' => $valueLang]);
+    return $resource->displayTitle(null, $valueLang) . ($date ? ', ' . $date->value() : '') . '.';
+};
+
+// Resolve an AtomicClocksPresentation proxy to the media it points at.
+$resolveSource = function ($media, $item) {
+    if (!$media || $media->ingester() !== 'aclocks_linked') {
+        return ['media' => $media, 'docItem' => null];
+    }
+    $data = $media->mediaData() ?: [];
+    $sourceMediaId = isset($data['source_media_id']) ? (int) $data['source_media_id'] : 0;
+    if (!$sourceMediaId) {
+        return ['media' => $media, 'docItem' => null];
+    }
+    try {
+        $source = $this->api()->read('media', $sourceMediaId)->getContent();
+        $docItem = $source->item();
+        return [
+            'media' => $source,
+            'docItem' => ($docItem && $docItem->id() !== $item->id()) ? $docItem : null,
+        ];
+    } catch (\Exception $e) {
+        return ['media' => $media, 'docItem' => null];
+    }
+};
+
+$plates = [];
+foreach ($attachments as $attachment) {
+    $item = $attachment->item();
+    if (!$item) {
+        continue;
+    }
+    $resolved = $resolveSource($attachment->media() ?: $item->primaryMedia(), $item);
+    $media = $resolved['media'];
+    $record = $resolved['docItem'] ?: $item;
+
+    // An author note replaces the generated line; it is one line of a mono
+    // caption, so any markup the editor left behind is dropped.
+    $note = trim(html_entity_decode(strip_tags((string) $attachment->caption()), ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+
+    $plates[] = [
+        'resource' => $media ?: $item,
+        'caption' => $note !== '' ? $note : $captionOf($record),
+        'alt' => $media ? $media->thumbnailAltText() : $item->thumbnailAltText(),
+        'captionUrl' => (string) $record->siteUrl(),
+    ];
+}
+
+if (!$plates) {
+    return;
+}
+?>
+<div class="atlas-figure is-<?php echo $this->escapeHtml($variant); ?><?php echo count($plates) > 1 ? ' has-pair' : ''; ?>">
+    <?php foreach ($plates as $plate): ?>
+    <?php echo $this->partial('common/atlas/plate', [
+        'resource' => $plate['resource'],
+        'type' => 'large',
+        'caption' => $plate['caption'],
+        'alt' => $plate['alt'],
+        'captionUrl' => $plate['captionUrl'],
+        'link' => false,
+        'zoom' => true,
+    ]); ?>
+    <?php endforeach; ?>
+</div>

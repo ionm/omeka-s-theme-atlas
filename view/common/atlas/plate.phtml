@@ -1,0 +1,51 @@
+<?php
+/**
+ * Specimen plate: the resource's thumbnail on a white plate with a hairline
+ * border, or the engraving placeholder when the resource has no image.
+ *
+ * Variables: $resource (representation), $type (thumbnail type, default
+ * 'medium'), $caption (optional string), $link (bool, default true),
+ * $zoom (bool, default false), $alt (optional string),
+ * $captionUrl (optional string).
+ *
+ * $captionUrl makes the caption text a link to the record the caption names -
+ * the plate's own image stays the expand control, so the reader gets to the
+ * catalogue entry through the words rather than through a second affordance.
+ *
+ * $link and $zoom are the two mounts a plate can have, and they are mutually
+ * exclusive: $link makes the image a link to the resource (entry cards),
+ * $zoom makes it the expand-in-place control an essay figure needs. Both use
+ * the .atlas-plate-link class, so a scan gets the same white-edge trim
+ * wherever it appears.
+ */
+$escape = $this->plugin('escapeHtml');
+$type = $type ?? 'medium';
+$link = $link ?? true;
+$zoom = $zoom ?? false;
+$caption = $caption ?? null;
+$captionUrl = $captionUrl ?? null;
+$url = $resource->thumbnailDisplayUrl($type);
+$alt = $alt ?? $resource->thumbnailAltText();
+$placeholderLabel = $this->themeSetting('placeholder_label', 'no image in inventory');
+$placeholderSrc = $this->themeSettingAssetUrl('masthead_image');
+$zoom = $zoom && $url && !$link;
+?>
+<figure class="atlas-plate<?php echo $url ? '' : ' is-placeholder'; ?>">
+    <?php if ($link): ?><a class="atlas-plate-link" href="<?php echo $escape($resource->siteUrl()); ?>" tabindex="-1" aria-hidden="true"><?php endif; ?>
+    <?php if ($zoom): ?><button type="button" class="atlas-plate-link atlas-plate-zoom atlas-plain" aria-expanded="false"><?php endif; ?>
+    <?php if ($url): ?>
+        <img src="<?php echo $escape($url); ?>" alt="<?php echo $escape($alt); ?>">
+    <?php else: ?>
+        <span class="atlas-placeholder">
+            <?php if ($placeholderSrc): ?>
+            <img src="<?php echo $escape($placeholderSrc); ?>" alt="" role="presentation">
+            <?php endif; ?>
+            <span class="atlas-placeholder-label"><?php echo $escape($placeholderLabel); ?></span>
+        </span>
+    <?php endif; ?>
+    <?php if ($zoom): ?></button><?php endif; ?>
+    <?php if ($link): ?></a><?php endif; ?>
+    <?php if ($caption): ?>
+    <figcaption><?php if ($captionUrl): ?><a href="<?php echo $escape($captionUrl); ?>"><?php echo $escape($caption); ?></a><?php else: ?><?php echo $escape($caption); ?><?php endif; ?></figcaption>
+    <?php endif; ?>
+</figure>

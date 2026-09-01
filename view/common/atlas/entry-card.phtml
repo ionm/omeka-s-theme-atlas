@@ -1,0 +1,131 @@
+<?php
+/**
+ * Entry card: a compact catalogue row — small specimen plate on the left,
+ * then title, a single label-free byline, and the facet tags.
+ *
+ * Field labels belong on the entry page, where a first-time reader needs to
+ * know what a value is; in a result list they cost a line each and the reader
+ * is scanning, not reading. Roughly 8 rows now fit a screen instead of 3.
+ *
+ * Variables:
+ *   $item          item representation
+ *   $byline        optional: array of parts, each an array of property terms.
+ *                  One part = one " · " segment; several terms inside a part
+ *                  are joined with ", " (a city term and a country term read
+ *                  as "City, Country"). Parts with no values are dropped, so
+ *                  there is never a dangling separator.
+ *   $tags          optional: array of property terms rendered as facet tags.
+ *   $thumbnailType optional, default 'large' (the plate is 225px wide in list
+ *                  view and a ~290px square in grid view; 'medium' is 200px
+ *                  and goes soft at those sizes)
+ *
+ * Defaults describe a Clock. Nothing here is Clock-specific though: a resource
+ * that has none of these properties (a Document, say) simply renders title +
+ * plate, because every part and tag is dropped when it has no value.
+ */
+$escape = $this->plugin('escapeHtml');
+$thumbnailType = $thumbnailType ?? 'large';
+
+// The one place to edit what a catalogue row says.
+$byline = $byline ?? [
+    ['aclocks:hostinstitution'],
+    ['dcterms:issued'],
+    ['dcterms:spatial', 'dcterms:coverage'],
+];
+$tags = $tags ?? [
+    'aclocks:devicetype',
+    'aclocks:operatingprinciple',
+    'aclocks:referencespecies',
+];
+
+$filterLocale = (bool) $this->siteSetting('filter_locale_values');
+$valueLang = $filterLocale ? [$this->lang(), ''] : null;
+
+/**
+ * Rendered HTML of every value of the given terms, joined with ", ".
+ *
+ * asHtml() is what the entry page uses, so the byline keeps exactly the same
+ * links: a host institution is a link to that Institution's page
+ * (a.resource-link), a city or country is a MetadataBrowse search link
+ * (a.metadata-browse-direct-link). Duplicates are dropped on the plain text,
+ * and empty values never reach the join, so no segment can dangle a separator.
+ * Values are already escaped by Omeka's renderers - do not escape again.
+ */
+$htmlOf = function (array $terms) use ($item, $valueLang) {
+    $parts = [];
+    $seen = [];
+    foreach ($terms as $term) {
+        foreach ($item->value($term, ['all' => true, 'lang' => $valueLang]) as $value) {
+            $html = trim((string) $value->asHtml());
+            $text = trim(html_entity_decode(strip_tags($html), ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+            if ($text === '' || isset($seen[$text])) {
+                continue;
+            }
+            $seen[$text] = true;
+            $parts[] = $html;
+        }
+    }
+    return implode(', ', $parts);
+};
+
+// Each part is wrapped in a span; the FIRST CONFIGURED part (the host
+// institution in the default mapping) carries .is-lead and prints in ink,
+// the rest stay muted - the browse spec's "Institution in --ink". Keyed to
+// the configured position, not to presence: when an entry has no
+// institution, its date does not get promoted to ink.
+$bylineParts = [];
+foreach (array_values($byline) as $i => $part) {
+    $html = $htmlOf($part);
+    if ($html !== '') {
+        $bylineParts[] = '<span class="atlas-byline-part' . (0 === $i ? ' is-lead' : '') . '">' . $html . '</span>';
+    }
+}
+?>
+<article class="atlas-entry">
+    <?php echo $this->partial('common/atlas/plate', ['resource' => $item, 'type' => $thumbnailType]); ?>
+    <div class="atlas-entry-body">
+        <h3 class="atlas-entry-title"><?php echo $item->link($item->displayTitle(null, $valueLang)); ?></h3>
+        <?php if ($bylineParts): ?>
+        <p class="atlas-entry-byline"><?php echo implode(' <span class="atlas-byline-sep">·</span> ', $bylineParts); ?></p>
+        <?php endif; ?>
+        <?php
+        // Facet tags: same deep-link helper as the entry page, so a tag here
+        // narrows the catalogue exactly as one there does.
+        //
+        // The helper returns null for a property with no value facet on the
+        // catalogue page (Reference species, at the time of writing). The entry
+        // page still links those values, because its fallback branch prints
+        // asHtml() and MetadataBrowse turns a literal into a search link - so a
+        // row was clickable there and dead here. Fall back the same way, and the
+        // two views agree whatever the facet configuration happens to be.
+        $tagItems = [];
+        foreach ($tags as $term) {
+            foreach ($item->value($term, ['all' => true, 'lang' => $valueLang]) as $value) {
+                if ('literal' !== $value->type()) {
+                    continue;
+                }
+                $text = trim((string) $value->value());
+                if ($text === '' || isset($tagItems[$text])) {
+                    continue;
+                }
+                $html = trim((string) $value->asHtml());
+                $tagItems[$text] = [
+                    'url' => $this->AtlasFacetLinks()->url($term, $text),
+                    // The chip styling hangs off "a" and "span" children of the
+                    // list, so a value MetadataBrowse left as bare text needs
+                    // the span; one it already wrapped in a link must NOT get
+                    // one, or the chip nests inside itself.
+                    'html' => false === stripos($html, '<a') ? '<span>' . $html . '</span>' : $html,
+                ];
+            }
+        }
+        ?>
+        <?php if ($tagItems): ?>
+        <ul class="atlas-entry-tags">
+            <?php foreach ($tagItems as $text => $tag): ?>
+            <li><?php if ($tag['url']): ?><a href="<?php echo $escape($tag['url']); ?>"><?php echo $escape($text); ?></a><?php else: ?><?php echo $tag['html']; ?><?php endif; ?></li>
+            <?php endforeach; ?>
+        </ul>
+        <?php endif; ?>
+    </div>
+</article>

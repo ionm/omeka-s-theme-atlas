@@ -1,0 +1,97 @@
+<?php
+$escape = $this->plugin('escapeHtml');
+$translate = $this->plugin('translate');
+$siteTitle = $site->title();
+$tagline = $this->themeSetting('tagline', 'A digital inventory and exhibition of the history of atomic timekeeping.');
+$mastheadImage = $this->themeSettingAssetUrl('masthead_image');
+$navDepth = (int) ($this->themeSetting('nav_depth', 1) ?: 1);
+
+$this->htmlElement('html')->setAttribute('lang', $this->lang());
+$this->headMeta()->setCharset('utf-8');
+$this->headMeta()->appendName('viewport', 'width=device-width, initial-scale=1');
+$this->headTitle($siteTitle)->setSeparator(' · ');
+$this->headTitle()->append($this->setting('installation_title', 'Omeka S'));
+$this->headLink()->prependStylesheet($this->assetUrl('css/atlas.css'));
+$this->headLink()->prependStylesheet($this->assetUrl('css/iconfonts.css', 'Omeka'));
+$this->headScript()->prependFile($this->assetUrl('js/atlas.js'));
+$this->headScript()->prependFile($this->assetUrl('js/global.js', 'Omeka'));
+$this->headScript()->prependFile($this->assetUrl('vendor/jquery/jquery.min.js', 'Omeka'));
+$this->jsTranslate();
+$this->trigger('view.layout');
+$userBar = $this->userBar();
+if ($userBar) {
+    $this->htmlElement('body')->appendAttribute('class', 'has-user-bar');
+}
+
+$partners = [];
+foreach ([1, 2] as $i) {
+    $logo = $this->themeSettingAssetUrl('partner_logo_' . $i);
+    if ($logo) {
+        $partners[] = [
+            'src' => $logo,
+            'name' => $this->themeSetting('partner_logo_' . $i . '_name', ''),
+            'url' => $this->themeSetting('partner_logo_' . $i . '_url', ''),
+        ];
+    }
+}
+?>
+<?php echo $this->doctype(); ?>
+<?php echo $this->htmlElement('html'); ?>
+    <head>
+        <?php echo $this->headMeta(); ?>
+        <?php echo $this->headTitle(); ?>
+        <?php echo $this->headLink(); ?>
+        <?php echo $this->headStyle(); ?>
+        <?php echo $this->headScript(); ?>
+    </head>
+    <?php echo $this->htmlElement('body'); ?>
+        <a id="skipnav" href="#content"><?php echo $translate('Skip to main content'); ?></a>
+        <?php echo $userBar; ?>
+        <header class="atlas-header">
+            <div class="atlas-masthead">
+                <div class="atlas-brand">
+                    <p class="atlas-wordmark"><a href="<?php echo $site->url(); ?>"><?php echo $escape($siteTitle); ?></a></p>
+                    <?php if ($tagline): ?>
+                    <p class="atlas-tagline"><?php echo $escape($tagline); ?></p>
+                    <?php endif; ?>
+                </div>
+                <?php if ($mastheadImage): ?>
+                <div class="atlas-engraving">
+                    <img src="<?php echo $escape($mastheadImage); ?>" alt="" role="presentation">
+                </div>
+                <?php endif; ?>
+            </div>
+            <div class="atlas-navbar">
+                <button type="button" id="atlas-nav-toggle" class="atlas-nav-toggle" aria-controls="atlas-nav" aria-expanded="false"><?php echo $translate('Menu'); ?></button>
+                <nav id="atlas-nav" class="atlas-nav" aria-label="<?php echo $translate('Main'); ?>">
+                    <?php echo $site->publicNav()->menu()->renderMenu(null, [
+                        'maxDepth' => $navDepth - 1,
+                        'ulClass' => 'atlas-menu',
+                    ]); ?>
+                </nav>
+                <button type="button" id="atlas-search-toggle" class="atlas-search-toggle" aria-controls="atlas-search" aria-expanded="false"><?php echo $translate('Search'); ?></button>
+            </div>
+            <div id="atlas-search" class="atlas-search">
+                <?php echo $this->partial('common/search-form'); ?>
+            </div>
+        </header>
+        <div id="content" class="atlas-content" role="main">
+            <?php echo $this->content; ?>
+        </div>
+        <footer class="atlas-footer">
+            <?php if ($partners): ?>
+            <div class="atlas-partners">
+                <?php foreach ($partners as $p): ?>
+                <?php if ($p['url']): ?><a href="<?php echo $escape($p['url']); ?>" class="atlas-partner"><?php else: ?><span class="atlas-partner"><?php endif; ?>
+                    <img src="<?php echo $escape($p['src']); ?>" alt="<?php echo $escape($p['name']); ?>">
+                <?php if ($p['url']): ?></a><?php else: ?></span><?php endif; ?>
+                <?php endforeach; ?>
+            </div>
+            <?php endif; ?>
+            <div class="atlas-colophon">
+                <span><?php echo $escape($this->themeSetting('footer_text', 'The Atomic Clock Atlas — an academic collaboration.')); ?></span>
+                <span><?php echo $escape($this->themeSetting('footer_licence', 'CC BY-NC 4.0')); ?></span>
+            </div>
+        </footer>
+    </body>
+</html>

@@ -1,0 +1,9 @@
+# Local working copies kept beside edited files; never part of the theme
+.DS_Store
+*.stock-*
+*.pre-*
+*.bak
+*.bak-*
+*.orig
+*.rej
+* copy.php

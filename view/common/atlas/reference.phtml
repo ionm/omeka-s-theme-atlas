@@ -1,0 +1,52 @@
+<?php
+/**
+ * Bibliographic entry page: the citation *is* the record, and the heading.
+ *
+ * No metadata table — a reference is a citation, not a set of fields. Rendered
+ * instead of the title + values block for items in scope (see the
+ * "bibliography_scope" theme setting); show.phtml checks the Bibliography
+ * module is present before calling this.
+ *
+ * Variables: $item
+ */
+$escape = $this->plugin('escapeHtml');
+$translate = $this->plugin('translate');
+
+// tag => '' returns the bare citation, so it can be the page heading.
+// bibliographic => true drops the ", <site>, accessed <date>, <url>" tail the
+// module appends for Omeka resources: a reference is cited from its original.
+$entry = trim((string) $this->citation($item, ['bibliographic' => true, 'tag' => '']));
+
+$abstract = $item->value('dcterms:abstract');
+
+$links = [];
+foreach ($item->value('bibo:doi', ['all' => true]) as $doi) {
+    $doi = trim((string) $doi->value());
+    if ($doi !== '') {
+        $links[] = ['url' => 'https://doi.org/' . ltrim($doi, '/'), 'label' => 'doi:' . $doi];
+    }
+}
+foreach ($item->value('bibo:uri', ['all' => true]) as $uri) {
+    $url = $uri->uri() ?: (string) $uri->value();
+    if ($url !== '') {
+        $links[] = ['url' => $url, 'label' => $translate('Publisher version')];
+    }
+}
+?>
+<div class="atlas-reference">
+    <?php if ($entry !== ''): ?>
+    <h2 class="atlas-reference-title"><?php echo $entry; ?></h2>
+    <?php else: ?>
+    <h2 class="atlas-entry-title"><?php echo $escape($item->displayTitle()); ?></h2>
+    <?php endif; ?>
+
+    <?php if ($abstract): ?>
+    <div class="atlas-reference-abstract"><?php echo $abstract->asHtml(); ?></div>
+    <?php endif; ?>
+
+    <?php if ($links): ?>
+    <p class="atlas-reference-links">
+        <?php foreach ($links as $i => $link): ?><?php if ($i): ?><span class="atlas-meta-sep"> · </span><?php endif; ?><a href="<?php echo $escape($link['url']); ?>" rel="noopener"><?php echo $escape($link['label']); ?></a><?php endforeach; ?>
+    </p>
+    <?php endif; ?>
+</div>

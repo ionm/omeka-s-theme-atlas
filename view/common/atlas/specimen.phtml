@@ -1,0 +1,216 @@
+<?php
+/**
+ * Specimen column: the primary image on a large plate with a mono caption,
+ * further images as small plates, other files as a list. Images open in a
+ * lightGallery popup (core's vendored copy) — nothing is embedded inline.
+ *
+ * Variables: $item, $valueLang (optional).
+ */
+$escape = $this->plugin('escapeHtml');
+$translate = $this->plugin('translate');
+$valueLang = $valueLang ?? null;
+
+$allMedia = $item->media();
+$primary = $item->primaryMedia();
+$images = [];
+$files = [];
+foreach ($allMedia as $media) {
+    if ($media->hasThumbnails() && $media->thumbnailDisplayUrl('large')) {
+        $images[] = $media;
+    } else {
+        $files[] = $media;
+    }
+}
+// Primary first.
+if ($primary) {
+    usort($images, function ($a, $b) use ($primary) {
+        return ($b->id() === $primary->id()) <=> ($a->id() === $primary->id());
+    });
+}
+
+$date = $item->value('dcterms:issued', ['lang' => $valueLang]) ?: $item->value('dcterms:date', ['lang' => $valueLang]);
+$caption = $item->displayTitle(null, $valueLang) . ($date ? ', ' . $date->value() : '') . '.';
+
+// The engraving placeholder only makes sense for physical objects: show it
+// when the item's resource template is listed in the theme setting
+// (default "Clock"); other image-less items get no specimen column at all.
+$templatesWithPlaceholder = array_filter(array_map('trim', explode(',', (string) $this->themeSetting('placeholder_templates', 'Clock'))));
+$template = $item->resourceTemplate();
+$wantsPlaceholder = $template && in_array($template->label(), $templatesWithPlaceholder, true);
+if (!$images && !$files && !$wantsPlaceholder) {
+    return;
+}
+
+$placeholderLabel = $this->themeSetting('placeholder_label', 'no image in inventory');
+$placeholderSrc = $this->themeSettingAssetUrl('masthead_image');
+
+if ($images) {
+    $this->headLink()->appendStylesheet($this->assetUrl('vendor/lightgallery/css/lightgallery-bundle.min.css', 'Omeka'));
+    $this->headScript()->appendFile($this->assetUrl('vendor/lightgallery/lightgallery.min.js', 'Omeka'));
+    $this->headScript()->appendFile($this->assetUrl('vendor/lightgallery/plugins/zoom/lg-zoom.min.js', 'Omeka'));
+    $this->headScript()->appendFile($this->assetUrl('vendor/lightgallery/plugins/thumbnail/lg-thumbnail.min.js', 'Omeka'));
+}
+
+// Source link for proxy media created by AtomicClocksPresentation: the media
+// renderer knows it, but here only the caption is needed, so use the media
+// title when it differs from the item title.
+$mediaCaption = function ($media) use ($item, $valueLang) {
+    $t = (string) $media->displayTitle(null, $valueLang);
+    // Imported bitstreams are titled by file name; drop the extension.
+    $t = preg_replace('/\.(png|jpe?g|tiff?|gif|webp|pdf)$/i', '', $t);
+    return $t !== '' && $t !== $item->displayTitle(null, $valueLang) ? $t : '';
+};
+
+// A clock's media are AtomicClocksPresentation proxies: pointers whose only
+// job is giving the clock thumbnails in cards, carousels and the API. The
+// reader should engage with the canonical media on the documentation item,
+// so resolve each proxy to its source (order and primary choice still come
+// from the proxies, which the admin can curate). Falls back to the proxy
+// itself when the source is gone or private.
+$resolveSource = function ($media) use ($item) {
+    if ($media->ingester() !== 'aclocks_linked') {
+        return ['media' => $media, 'docItem' => null];
+    }
+    $data = $media->mediaData() ?: [];
+    $sourceMediaId = isset($data['source_media_id']) ? (int) $data['source_media_id'] : 0;
+    if (!$sourceMediaId) {
+        return ['media' => $media, 'docItem' => null];
+    }
+    try {
+        $source = $this->api()->read('media', $sourceMediaId)->getContent();
+        $docItem = $source->item();
+        return [
+            'media' => $source,
+            'docItem' => ($docItem && $docItem->id() !== $item->id()) ? $docItem : null,
+        ];
+    } catch (\Exception $e) {
+        return ['media' => $media, 'docItem' => null];
+    }
+};
+
+// Video documents (1.8.0): an entry whose "video_properties" value (default
+// foaf:page) is a URI is a film held elsewhere, and its plate image is a still.
+// The still joins the lightbox like any plate; the film stays one click away,
+// exactly as a PDF does: a VIDEO badge on the plate and a "Play video" link in
+// the lightbox caption open the URL in a new tab. The value is read from the
+// documentation item when the plate resolves to one (clock pages), otherwise
+// from the entry itself. First http(s) value wins; literals that are URLs count.
+$videoTerms = array_filter(array_map('trim', explode(',', (string) $this->themeSetting('video_properties', 'foaf:page'))));
+$videoHrefOf = function ($owner) use ($videoTerms) {
+    foreach ($videoTerms as $term) {
+        foreach ($owner->value($term, ['all' => true]) as $v) {
+            $href = trim((string) ($v->uri() ?: $v->value()));
+            if (preg_match('~^https?://~i', $href)) {
+                return $href;
+            }
+        }
+    }
+    return null;
+};
+?>
+<div class="atlas-specimen" id="atlas-specimen">
+<?php if ($images): ?>
+    <?php foreach ($images as $i => $media): ?>
+    <?php
+    $resolved = $resolveSource($media);
+    $display = $resolved['media'];
+    $docItem = $resolved['docItem'];
+    $large = $display->thumbnailDisplayUrl('large');
+    $medium = $display->thumbnailDisplayUrl('medium');
+    $alt = $display->altText() ?: $display->displayTitle(null, $valueLang);
+    // Caption: the documentation item's title when the image comes from one,
+    // linked to that document's page; otherwise the media caption as before.
+    if ($docItem) {
+        $subText = (string) $docItem->displayTitle(null, $valueLang);
+        $subHtml = '<p><a href="' . $escape($docItem->siteUrl()) . '">' . $escape($subText) . '</a></p>';
+    } else {
+        $subText = $mediaCaption($display);
+        $subHtml = '<p>' . $escape($subText ?: $caption) . '</p>';
+    }
+    ?>
+    <?php
+    // PDFs join the lightbox like any plate, showing the SOURCE media's own
+    // derivative. When bibo:locator names a page, the ACP sync job re-renders
+    // the documentation media's derivatives from that page, so the chosen
+    // page represents the document everywhere. The actual document stays one
+    // click away: the PDF badge on the plate and an "Open PDF" link in the
+    // lightbox caption open it in a new tab - honouring bibo:locator as
+    // #page=N (Chrome/Firefox/Edge).
+    $isPdf = 'application/pdf' === $display->mediaType();
+    $pdfHref = null;
+    if ($isPdf) {
+        // Optional opening page: bibo:locator holds the PDF viewer's
+        // sequential page number (not the printed page). Media-level wins
+        // (per-file, survives re-imports automatically because unchanged
+        // media are carried over); the owning item's value is the fallback
+        // (add bibo:locator to the import's Omeka-owned fields to keep it).
+        $pdfPage = 0;
+        $locator = $display->value('bibo:locator');
+        if (!$locator) {
+            $locatorOwner = $docItem ?: $item;
+            $locator = $locatorOwner->value('bibo:locator');
+        }
+        if ($locator && preg_match('/^\d+$/', trim((string) $locator->value()))) {
+            $pdfPage = (int) trim((string) $locator->value());
+        }
+        $pdfHref = $display->originalUrl() . ($pdfPage > 1 ? '#page=' . $pdfPage : '');
+        $subHtml = rtrim($subHtml);
+        $subHtml = substr($subHtml, 0, -4) . ' &middot; <a href="' . $escape($pdfHref) . '" target="_blank" rel="noopener">' . $escape($translate('Open PDF')) . '</a></p>';
+    }
+    $videoHref = $isPdf ? null : $videoHrefOf($docItem ?: $item);
+    if ($videoHref) {
+        $subHtml = rtrim($subHtml);
+        $subHtml = substr($subHtml, 0, -4) . ' &middot; <a href="' . $escape($videoHref) . '" target="_blank" rel="noopener">' . $escape($translate('Play video')) . '</a></p>';
+    }
+    ?>
+    <figure class="atlas-plate <?php echo $i === 0 ? 'is-primary' : 'is-secondary'; ?><?php echo $isPdf ? ' is-pdf' : ''; ?><?php echo $videoHref ? ' is-video' : ''; ?>">
+        <a class="atlas-specimen-link" href="<?php echo $escape($large); ?>" data-src="<?php echo $escape($large); ?>" data-thumb="<?php echo $escape($medium); ?>" data-sub-html="<?php echo $escape($subHtml); ?>">
+            <img src="<?php echo $escape($i === 0 ? $large : $medium); ?>" alt="<?php echo $escape($alt); ?>"<?php echo $i === 0 ? '' : ' loading="lazy"'; ?>>
+        </a>
+        <?php if ($isPdf): ?>
+        <a class="atlas-plate-badge" href="<?php echo $escape($pdfHref); ?>" target="_blank" rel="noopener" title="<?php echo $escape($translate('Open the PDF document')); ?>">PDF</a>
+        <?php endif; ?>
+        <?php if ($videoHref): ?>
+        <a class="atlas-plate-badge" href="<?php echo $escape($videoHref); ?>" target="_blank" rel="noopener" title="<?php echo $escape($translate('Play the video')); ?>">VIDEO</a>
+        <?php endif; ?>
+        <?php
+        // The "Play video" action sits in the caption, visible without opening
+        // the lightbox (the PDF equivalent, "Open PDF", is lightbox-only because
+        // the badge already names the file type; a film needs a verb).
+        $playHtml = $videoHref
+            ? ' <a class="atlas-plate-play" href="' . $escape($videoHref) . '" target="_blank" rel="noopener">' . $escape($translate('Play video')) . '</a>'
+            : '';
+        ?>
+        <?php if ($i === 0 && !$docItem): ?>
+        <figcaption><?php echo $escape($caption) . $playHtml; ?></figcaption>
+        <?php elseif ($docItem): ?>
+        <figcaption><a href="<?php echo $escape($docItem->siteUrl()); ?>"><?php echo $escape($subText); ?></a><?php echo $playHtml; ?></figcaption>
+        <?php elseif ($subText): ?>
+        <figcaption><?php echo $escape($subText) . $playHtml; ?></figcaption>
+        <?php elseif ($playHtml): ?>
+        <figcaption><?php echo $playHtml; ?></figcaption>
+        <?php endif; ?>
+    </figure>
+    <?php endforeach; ?>
+<?php else: ?>
+    <figure class="atlas-plate is-primary is-placeholder">
+        <span class="atlas-placeholder">
+            <?php if ($placeholderSrc): ?>
+            <img src="<?php echo $escape($placeholderSrc); ?>" alt="" role="presentation">
+            <?php endif; ?>
+            <span class="atlas-placeholder-label"><?php echo $escape($placeholderLabel); ?></span>
+        </span>
+        <figcaption><?php echo $escape($caption); ?></figcaption>
+    </figure>
+<?php endif; ?>
+<?php if ($files): ?>
+    <div class="atlas-files">
+        <span class="atlas-label"><?php echo $translate('Files'); ?></span>
+        <ul>
+            <?php foreach ($files as $media): ?>
+            <li><?php echo $media->link($media->displayTitle(null, $valueLang)); ?><?php if ($media->mediaType()): ?> <span class="atlas-file-type"><?php echo $escape($media->mediaType()); ?></span><?php endif; ?></li>
+            <?php endforeach; ?>
+        </ul>
+    </div>
+<?php endif; ?>
+</div>

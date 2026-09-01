@@ -1,0 +1,132 @@
+<?php
+/**
+ * Site page.
+ *
+ * Byte-for-byte core behaviour for an ordinary page (About, the Essays index,
+ * the home page). An ESSAY - a page built from the Atlas essay blocks, see
+ * helper/AtlasEssay.php - is additionally wrapped in an <article> and given
+ * the same chrome the Document entry page has, so the two register: a back
+ * link on the left, the type badge on the right, the title, then one
+ * continuous flow of prose past the margin figures.
+ *
+ * Nothing here is essay-specific beyond that wrapper: the title is core's
+ * pageTitle block, the prose is HTML blocks with the "Atlas essay" template,
+ * the figures are Media blocks with the three Atlas figure templates, and the
+ * references are the "Atlas bibliography" block. The theme only supplies the
+ * page division and the two rows of chrome the blocks cannot draw themselves.
+ */
+$this->headLink()->appendStylesheet($this->assetUrl('css/page-blocks.css', 'Omeka'));
+$this->htmlElement('body')->appendAttribute('class', $pageBodyClass);
+$this->pageTitle($page->title(), 2);
+$nav = $site->publicNav();
+$activePage = $nav->findActive($nav->getContainer());
+switch ($this->siteSetting('subnav_display')) {
+    case 'show':
+        $displaySubnav = $this->displayNavigation;
+        break;
+    case 'hide':
+        $displaySubnav = false;
+        break;
+    default:
+        $displaySubnav = $this->displayNavigation && $activePage && $activePage['page']->hasPages();
+}
+$showPagePagination = $this->siteSetting('show_page_pagination', true);
+
+$escape = $this->plugin('escapeHtml');
+$translate = $this->plugin('translate');
+
+$essay = $this->AtlasEssay();
+$isEssay = $essay->isEssay($page);
+
+if ($isEssay) {
+    // Scopes the print design (atlas.css section 10d) to essays: the
+    // masthead and its rule are treated differently on paper here than on
+    // an entry page, and .atlas-navbar is outside the article, so an
+    // ancestor class on <body> is the only handle.
+    $this->htmlElement('body')->appendAttribute('class', 'is-atlas-essay');
+    $front = $essay->frontMatter($page);
+    $pdfUrl = $essay->pdfUrl($page);
+
+    // Back link: the essay's PARENT in the site navigation, by its own label,
+    // so "Back to essays" needs no setting and follows the page if the section
+    // is renamed or moved. Only when the page actually sits under one.
+    $backLabel = trim((string) $this->themeSetting('essay_back_label', 'Back to essays'));
+    $backUrl = $site->url();
+    if ($activePage) {
+        $parent = $activePage['page']->getParent();
+        if ($parent instanceof \Laminas\Navigation\Page\AbstractPage) {
+            $parentLabel = trim((string) $parent->getLabel());
+            if ($parentLabel !== '') {
+                $backLabel = sprintf($translate('Back to %s'), lcfirst($parentLabel));
+            }
+            $backUrl = $parent->getHref() ?: $backUrl;
+        }
+    }
+
+    // Reference-manager tags: the essay is a SECTION OF the Atlas, so the
+    // container is citation_inbook_title and there is no editor statement.
+    $containerTitle = $this->themeSetting('citation_site_title', '') ?: $site->title();
+    $this->headMeta()->appendName('citation_inbook_title', $containerTitle);
+    $this->headMeta()->appendName('citation_title', $page->title());
+    foreach ($front['authors'] as $author) {
+        $this->headMeta()->appendName('citation_author', $author['name']);
+    }
+    if ($front['date'] !== '') {
+        $this->headMeta()->appendName('citation_publication_date', $front['date']);
+    }
+    if ($pdfUrl !== '') {
+        $this->headMeta()->appendName('citation_pdf_url', $pdfUrl);
+    }
+}
+?>
+
+<?php if ($activePage): ?>
+<?php if ($activePage['depth'] !== 0 && !$isEssay): ?>
+<nav class="breadcrumbs"><?php echo $nav->breadcrumbs(); ?></nav>
+<?php endif; ?>
+<?php endif; ?>
+
+<?php if ($activePage): ?>
+<?php if ($displaySubnav && !$isEssay): ?>
+<nav class="sub-menu"><?php echo $nav->menu()->renderSubMenu(); ?></nav>
+<?php endif; ?>
+<?php endif; ?>
+
+<?php if ($isEssay): ?>
+<article class="atlas-page atlas-essay-page">
+    <?php // One baseline, exactly as on the Document entry page: where the
+    // reader came from on the left, what kind of page this is on the right.
+    // "Essay", singular - it labels this page, not the section. ?>
+    <div class="atlas-toprow">
+        <p class="atlas-back"><a href="<?php echo $escape($backUrl); ?>">&lsaquo; <?php echo $escape($backLabel); ?></a></p>
+        <div class="atlas-essay-chrome">
+            <?php if ($pdfUrl !== ''): ?>
+            <a class="atlas-essay-pdf" href="<?php echo $escape($pdfUrl); ?>"><?php echo $translate('Download (PDF)'); ?></a>
+            <?php endif; ?>
+            <p class="atlas-entry-eyebrow"><?php echo $translate('Essay'); ?></p>
+        </div>
+    </div>
+
+    <?php $this->trigger('view.show.before'); ?>
+    <div class="blocks atlas-essay-body">
+        <?php echo $this->content; ?>
+    </div>
+    <?php $this->trigger('view.show.after'); ?>
+
+    <?php echo $this->partial('common/atlas/citation', [
+        'label' => $translate('Cite this essay'),
+        'title' => $page->title(),
+        'permalink' => $page->siteUrl(null, true),
+        'authors' => $front['names'],
+    ]); ?>
+</article>
+<?php else: ?>
+<?php $this->trigger('view.show.before'); ?>
+<div class="blocks">
+    <?php echo $this->content; ?>
+</div>
+<?php $this->trigger('view.show.after'); ?>
+<?php endif; ?>
+<?php if ($showPagePagination && !$isEssay): ?>
+<?php echo $this->sitePagePagination(); ?>
+<?php endif; ?>

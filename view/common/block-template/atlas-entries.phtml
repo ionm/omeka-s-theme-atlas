@@ -1,0 +1,31 @@
+<?php
+/**
+ * Block template "Atlas entries" for Browse preview blocks: the results as
+ * entry cards (same partial as the catalogue), with an optional heading and
+ * "browse all" link.
+ */
+$escape = $this->plugin('escapeHtml');
+?>
+<div class="atlas-preview">
+<?php if ($this->heading): ?>
+    <h2 class="atlas-preview-heading"><?php echo $escape($this->heading); ?></h2>
+<?php endif; ?>
+    <div class="atlas-entries">
+    <?php foreach ($this->resources as $resource): ?>
+        <?php if ($this->resourceType === 'item'): ?>
+        <?php echo $this->partial('common/atlas/entry-card', ['item' => $resource]); ?>
+        <?php else: ?>
+        <article class="atlas-entry">
+            <?php echo $this->partial('common/atlas/plate', ['resource' => $resource]); ?>
+            <div class="atlas-entry-body">
+                <h3 class="atlas-entry-title"><?php echo $resource->link($resource->displayTitle()); ?></h3>
+                <?php if ($d = $resource->displayDescription()): ?><p class="atlas-entry-description"><?php echo $escape($d); ?></p><?php endif; ?>
+            </div>
+        </article>
+        <?php endif; ?>
+    <?php endforeach; ?>
+    </div>
+<?php if ($this->linkText): ?>
+    <p class="atlas-preview-more"><?php echo $this->hyperlink($this->linkText, $this->url('site/resource', ['controller' => $this->resourceType, 'action' => 'browse'], ['query' => $this->query], true), ['class' => 'atlas-button is-small']); ?></p>
+<?php endif; ?>
+</div>

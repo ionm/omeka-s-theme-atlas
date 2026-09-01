@@ -1,0 +1,211 @@
+<?php
+/**
+ * Entry page: specimen plate(s) on the left, title + metadata on the right,
+ * description and actions (permalink, citation) below the metadata.
+ *
+ * The theme renders the media itself (see common/atlas/specimen), so any media
+ * block a site administrator leaves in the "main" region is skipped here.
+ */
+$translate = $this->plugin('translate');
+$escape = $this->plugin('escapeHtml');
+$this->headLink()->appendStylesheet($this->assetUrl('css/resource-page-blocks.css', 'Omeka'));
+$this->htmlElement('body')->appendAttribute('class', 'item resource show');
+$filterLocale = (bool) $this->siteSetting('filter_locale_values');
+$valueLang = $filterLocale ? [$this->lang(), ''] : null;
+
+$title = $item->displayTitle(null, $valueLang);
+
+// Alternative title(s), printed under the title for sectioned entries (the
+// same templates whose metadata common/resource-values regroups; that partial
+// drops dcterms:alternative from the table so it is not shown twice).
+$altTitles = [];
+$sectionTemplates = array_filter(array_map('trim', explode(',', (string) $this->themeSetting('section_templates', 'Clock'))));
+$itemTemplateLabel = ($t = $item->resourceTemplate()) ? (string) $t->label() : '';
+foreach ($sectionTemplates as $candidate) {
+    if ($itemTemplateLabel !== '' && 0 === strcasecmp($candidate, $itemTemplateLabel)) {
+        foreach ($item->value('dcterms:alternative', ['all' => true, 'lang' => $valueLang]) as $altValue) {
+            $altText = trim((string) $altValue->value());
+            if ($altText !== '') {
+                $altTitles[] = $altText;
+            }
+        }
+        break;
+    }
+}
+
+// Resource-type label: a small filled tag saying what KIND of record this is,
+// rendered on the back-link's baseline (.atlas-toprow below), right-aligned -
+// page chrome, not a heading, so it cannot be confused with the tracked-caps
+// section headings near the top of a Document page. Deliberately asymmetric -
+// clocks are the catalogue's primary objects and the unmarked default,
+// documents are supporting records reached through them, so only the latter
+// is labelled. Without it, clicking a photograph on a clock page lands the
+// reader on a page dominated by the same photograph with nothing to signal
+// the change of level.
+//
+// Setting "eyebrow_templates": comma-separated template labels, each with an
+// optional "= Text" (the template is called Documentation; the reader should
+// see DOCUMENT). No text means the template's own label is used.
+$eyebrow = '';
+$itemTemplateLabel = ($itemTemplate = $item->resourceTemplate()) ? (string) $itemTemplate->label() : '';
+// Matched against the template label AND the item set titles, the same way
+// bibliography_scope is: an item that arrived without a resource template (the
+// stock Zotero Import assigns none) still belongs to a set, so set-matching is
+// what makes the label robust regardless of how the items were imported.
+$eyebrowNames = [];
+if ($itemTemplateLabel !== '') {
+    $eyebrowNames[] = $itemTemplateLabel;
+}
+foreach ($item->itemSets() as $eyebrowItemSet) {
+    $eyebrowNames[] = (string) $eyebrowItemSet->displayTitle();
+}
+foreach (array_filter(array_map('trim', explode(',', (string) $this->themeSetting('eyebrow_templates', 'Documentation = Document, References = Reference, Institutions = Institution')))) as $candidate) {
+    $eyebrowText = '';
+    if (strpos($candidate, '=') !== false) {
+        [$candidate, $eyebrowText] = array_map('trim', explode('=', $candidate, 2));
+    }
+    foreach ($eyebrowNames as $eyebrowName) {
+        if ($eyebrowName !== '' && 0 === strcasecmp($candidate, $eyebrowName)) {
+            $eyebrow = $eyebrowText !== '' ? $eyebrowText : $eyebrowName;
+            break 2;
+        }
+    }
+}
+
+// Back link (theme settings; default: the site's first Faceted Browse page).
+$backLabel = $this->themeSetting('back_link_label', 'Back to the catalogue');
+$backUrl = trim((string) $this->themeSetting('back_link_url', ''));
+if ($backUrl === '') {
+    $backUrl = $this->currentSite()->url() . '/faceted-browse/1';
+} elseif (!preg_match('~^(https?:)?/~', $backUrl)) {
+    $backUrl = $this->currentSite()->url() . '/' . ltrim($backUrl, '/');
+}
+
+// Contextual back link: when the reader crossed into this record FROM one of
+// the entries that link to it, go back to that entry by name instead of to the
+// catalogue. Only entries that actually link here are candidates, so the
+// referrer cannot make the page claim a relationship that does not exist; and
+// because the referrer names which one, this still works when several entries
+// link to the same document. Arriving directly (no referrer, a bookmark, an
+// external link) keeps the generic catalogue link - it would not be "back".
+if ($eyebrow !== '') {
+    $referrer = (string) ($_SERVER['HTTP_REFERER'] ?? '');
+    if ($referrer !== '') {
+        $referrerHost = parse_url($referrer, PHP_URL_HOST);
+        $siteHost = parse_url($this->serverUrl(), PHP_URL_HOST);
+        if ($referrerHost && $siteHost && 0 === strcasecmp($referrerHost, $siteHost)) {
+            $referrerPath = rtrim((string) parse_url($referrer, PHP_URL_PATH), '/');
+            $siteId = $this->siteSetting('exclude_resources_not_in_site') ? $this->currentSite()->id() : null;
+            foreach ($item->subjectValues(1, 200, null, null, $siteId) as $subjectValues) {
+                foreach ($subjectValues as $subjectValue) {
+                    $linker = $subjectValue['val']->resource();
+                    // An entry is reachable at both its Clean Url and the
+                    // plain /item/<id>; accept either as "we came from there".
+                    $linkerPath = rtrim((string) parse_url((string) $linker->siteUrl(), PHP_URL_PATH), '/');
+                    $linkerIdPath = '/item/' . $linker->id();
+                    if (($linkerPath !== '' && $linkerPath === $referrerPath)
+                        || substr($referrerPath, -strlen($linkerIdPath)) === $linkerIdPath
+                    ) {
+                        $backLabel = sprintf($translate('Back to %s'), $linker->displayTitle(null, $valueLang));
+                        $backUrl = $linker->siteUrl();
+                        break 2;
+                    }
+                }
+            }
+        }
+    }
+}
+
+// Resource page blocks of the main region, minus media presentations.
+$blocks = $this->resourcePageBlocks($item)->getBlocksArray();
+unset($blocks['mediaEmbeds'], $blocks['lightboxGallery'], $blocks['mediaList']);
+$valuesBlock = $blocks['values'] ?? null;
+unset($blocks['values']);
+
+// Entries whose record *is* a bibliographic reference: the Bibliography
+// module's CSL citation replaces the title and the metadata table entirely.
+// Matched on item set title or resource template label — Zotero Import assigns
+// no resource template, so template alone matches nothing. Falls back to the
+// normal entry layout if the module is absent.
+$bibliographyScope = array_filter(array_map('trim', explode(',', (string) $this->themeSetting('bibliography_scope', 'References'))));
+$isBibliographic = false;
+if ($bibliographyScope && $this->getHelperPluginManager()->has('citation')) {
+    $scopeNames = [];
+    if ($itemTemplate = $item->resourceTemplate()) {
+        $scopeNames[] = (string) $itemTemplate->label();
+    }
+    foreach ($item->itemSets() as $itemSet) {
+        $scopeNames[] = (string) $itemSet->displayTitle();
+    }
+    foreach ($bibliographyScope as $candidate) {
+        foreach ($scopeNames as $scopeName) {
+            if (0 === strcasecmp($candidate, $scopeName)) {
+                $isBibliographic = true;
+                break 2;
+            }
+        }
+    }
+}
+?>
+<?php
+// The left column is an ASIDE, not a "specimen column": plates when the entry
+// has any, then the linked entries under them. An entry with no image at all
+// (a reference, an institution) still gets the column, holding just its
+// "Cited by" / "Linked entries" list - so every record type in the Atlas has
+// the same shape, relations on the left and the record on the right, instead
+// of references and institutions dropping their relations to the page foot.
+// Only when the aside would be completely empty does the entry go one-column.
+$specimen = trim($this->partial('common/atlas/specimen', ['item' => $item, 'valueLang' => $valueLang]));
+$aside = $specimen . ($blocks ? implode('', $blocks) : '');
+if ($aside !== '') {
+    $blocks = [];
+}
+?>
+<article class="atlas-page atlas-entry-page<?php echo $specimen === '' ? ' has-no-specimen' : ''; ?><?php echo $aside === '' ? ' has-no-aside' : ''; ?><?php echo $isBibliographic ? ' is-bibliographic' : ''; ?>">
+    <?php // Back-link and resource-type label share one baseline: where the
+    // reader came from on the left, what kind of record this is on the right.
+    // See the $eyebrow comment above for why the label is Document-only. ?>
+    <?php if ($backLabel || $eyebrow !== ''): ?>
+    <div class="atlas-toprow">
+        <?php if ($backLabel): ?>
+        <p class="atlas-back"><a href="<?php echo $escape($backUrl); ?>">‹ <?php echo $escape($translate($backLabel)); ?></a></p>
+        <?php endif; ?>
+        <?php if ($eyebrow !== ''): ?>
+        <p class="atlas-entry-eyebrow"><?php echo $escape($translate($eyebrow)); ?></p>
+        <?php endif; ?>
+    </div>
+    <?php endif; ?>
+
+    <div class="atlas-entry-grid">
+        <?php if ($aside !== ''): ?>
+        <div class="atlas-entry-specimen">
+            <?php echo $aside; ?>
+        </div>
+        <?php endif; ?>
+
+        <div class="atlas-entry-main">
+            <?php if (!$isBibliographic): ?>
+            <?php echo $this->pageTitle($title, 2); ?>
+            <?php if ($altTitles): ?>
+            <p class="atlas-entry-alt"><?php echo $escape($translate('Also known as:')); ?> <?php echo $escape(implode('; ', $altTitles)); ?></p>
+            <?php endif; ?>
+            <?php endif; ?>
+            <?php $this->trigger('view.show.before'); ?>
+            <?php if ($isBibliographic): ?>
+            <?php echo $this->partial('common/atlas/reference', ['item' => $item]); ?>
+            <?php else: ?>
+            <div class="atlas-show-blocks">
+                <?php echo $valuesBlock; ?>
+            </div>
+            <?php endif; ?>
+            <?php echo $this->partial('common/atlas/citation', ['resource' => $item, 'valueLang' => $valueLang]); ?>
+            <?php $this->trigger('view.show.after'); ?>
+        </div>
+    </div>
+
+    <?php if ($blocks): ?>
+    <div class="atlas-show-blocks atlas-entry-more">
+        <?php echo implode('', $blocks); ?>
+    </div>
+    <?php endif; ?>
+</article>

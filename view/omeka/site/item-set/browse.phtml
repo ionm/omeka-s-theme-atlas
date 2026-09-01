@@ -1,0 +1,40 @@
+<?php
+$translate = $this->plugin('translate');
+$escape = $this->plugin('escapeHtml');
+$this->htmlElement('body')->appendAttribute('class', 'item-set resource browse');
+$filterLocale = (bool) $this->siteSetting('filter_locale_values');
+$valueLang = $filterLocale ? [$this->lang(), ''] : null;
+?>
+<div class="atlas-page">
+<?php echo $this->pageTitle($translate('Collections'), 2); ?>
+<?php echo $this->searchFilters(); ?>
+<div class="browse-controls atlas-controls">
+    <?php echo $this->pagination(); ?>
+    <span class="atlas-controls-spacer"></span>
+    <?php echo $this->browse()->renderSortSelector('item_sets'); ?>
+</div>
+<?php $this->trigger('view.browse.before'); ?>
+<div class="atlas-entries">
+<?php foreach ($itemSets as $itemSet): ?>
+    <article class="atlas-entry">
+        <?php echo $this->partial('common/atlas/plate', ['resource' => $itemSet]); ?>
+        <div class="atlas-entry-body">
+            <h3 class="atlas-entry-title"><?php echo $itemSet->link($itemSet->displayTitle(null, $valueLang)); ?></h3>
+            <?php if ($description = $itemSet->displayDescription(null, $valueLang)): ?>
+            <p class="atlas-entry-description"><?php echo $escape($description); ?></p>
+            <?php endif; ?>
+            <dl class="atlas-meta">
+                <div class="atlas-meta-row">
+                    <dt><?php echo $translate('Entries'); ?></dt>
+                    <dd><?php echo $escape($itemSet->itemCount()); ?></dd>
+                </div>
+            </dl>
+        </div>
+    </article>
+<?php endforeach; ?>
+</div>
+<?php $this->trigger('view.browse.after'); ?>
+<div class="browse-controls atlas-controls is-bottom">
+    <?php echo $this->pagination(); ?>
+</div>
+</div>

@@ -1,0 +1,10 @@
+<?php
+/**
+ * Block template "Atlas figure - page" for Media blocks: margin plus text - the full content width; two attachments sit side by side.
+ *
+ * The width is the template. See common/atlas/figure.phtml.
+ */
+echo $this->partial('common/atlas/figure', [
+    'attachments' => $attachments,
+    'variant' => 'page',
+]);

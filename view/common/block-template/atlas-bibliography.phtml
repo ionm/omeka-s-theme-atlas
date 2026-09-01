@@ -1,0 +1,42 @@
+<?php
+/**
+ * Block template "Atlas bibliography" for HTML blocks.
+ *
+ * Prints the works cited by the citation tokens in the essay blocks ABOVE it -
+ * nothing else, and nothing to maintain by hand: the list cannot drift out of
+ * step with the prose. Place it last on the page.
+ *
+ * The block's own HTML content, if any, is printed before the list, so the
+ * heading can be reworded per essay ("Works cited", a note on the sources)
+ * without a theme setting. Empty content gets the default heading.
+ *
+ * Entries carry id="ref-<citation key>", which is what the in-text citations
+ * link to.
+ *
+ * @see themes/atlas/helper/AtlasBibkeys.php
+ */
+$escape = $this->plugin('escapeHtml');
+$bibkeys = $this->AtlasBibkeys();
+$works = $bibkeys->citedWorks();
+
+if (!$works):
+    return;
+endif;
+
+$intro = trim((string) $block->dataValue('html', ''));
+?>
+<div class="atlas-bibliography">
+    <?php if ($intro !== ''): ?>
+        <?php echo $intro; ?>
+    <?php else: ?>
+        <h2 class="atlas-bibliography-heading"><?php echo $escape($this->translate('References')); ?></h2>
+    <?php endif; ?>
+
+    <ul class="atlas-bibliography-list">
+        <?php foreach ($works as $work): ?>
+        <li class="atlas-bibliography-entry" id="<?php echo $escape($bibkeys->anchorId($work['key'])); ?>">
+            <a href="<?php echo $escape($work['item']->siteUrl()); ?>"><?php echo $work['citation']; ?></a>
+        </li>
+        <?php endforeach; ?>
+    </ul>
+</div>

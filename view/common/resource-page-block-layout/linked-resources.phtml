@@ -1,0 +1,66 @@
+<?php
+/**
+ * Atlas override of the "Linked resources" resource-page block: a compact
+ * list of the entries that link to this one, with a heading that names the
+ * relationship instead of core's generic
+ * "Items with "<property>: <title>"" caption.
+ *
+ * Headings by the entry's item set:
+ *   Clocks         -> Documents for this clock
+ *   Documentation  -> Clocks in this document
+ *   References     -> Cited by
+ *   otherwise      -> Linked entries
+ */
+$escape = $this->plugin('escapeHtml');
+$translate = $this->plugin('translate');
+
+$siteId = null;
+if ($this->siteSetting('exclude_resources_not_in_site')) {
+    $siteId = $this->currentSite()->id();
+}
+
+if (!$resource->subjectValueTotalCount(null, null, $siteId)) {
+    return;
+}
+
+$setTitles = [];
+foreach ($resource->itemSets() as $itemSet) {
+    $setTitles[] = mb_strtolower((string) $itemSet->displayTitle());
+}
+if (in_array('clocks', $setTitles)) {
+    $heading = 'Documents for this clock'; // @translate
+} elseif (in_array('documentation', $setTitles)) {
+    $heading = 'Clocks in this document'; // @translate
+} elseif (in_array('references', $setTitles)) {
+    $heading = 'Cited by'; // @translate
+} else {
+    $heading = 'Linked entries'; // @translate
+}
+
+// Flatten to unique linking resources (an entry linking twice lists once).
+$linkers = [];
+foreach ($resource->subjectValues(1, 200, null, null, $siteId) as $propertyLabel => $subjectValues) {
+    foreach ($subjectValues as $subjectValue) {
+        $linker = $subjectValue['val']->resource();
+        $linkers[$linker->id()] = $linker;
+    }
+}
+if (!$linkers) {
+    return;
+}
+?>
+<div class="atlas-entry-links" id="resources-linked">
+    <h3><?php echo $escape($translate($heading)); ?></h3>
+    <ul>
+        <?php foreach ($linkers as $linker): ?>
+        <li>
+            <?php // The same plate as a catalogue row, so an entry with no image
+            // gets the engraving placeholder here too. Core's thumbnail() helper
+            // returns an empty string instead, which left a title with a ragged
+            // gap where its neighbours had a picture. ?>
+            <?php echo $this->partial('common/atlas/plate', ['resource' => $linker, 'type' => 'square']); ?>
+            <?php echo $linker->link($linker->displayTitle()); ?>
+        </li>
+        <?php endforeach; ?>
+    </ul>
+</div>

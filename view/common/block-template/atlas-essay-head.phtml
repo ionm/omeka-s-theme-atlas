@@ -1,0 +1,35 @@
+<?php
+/**
+ * Block template "Atlas essay byline" for HTML blocks.
+ *
+ * The essay's front matter, written as plain "Label = Value" lines (see
+ * helper/AtlasEssay.php for the syntax and why it lives here). Rendered as a
+ * metadata table with the entry pages' proportions - 200px label column, 20px
+ * gap - so an essay's byline sits in the same grid as a Document's record.
+ *
+ * The SAME parse is read by view/omeka/site/page/show.phtml for the Download
+ * (PDF) link, the citation panel and the reference-manager head tags, so the
+ * block is the single source and nothing has to be entered twice.
+ *
+ * Place it directly under the page title block.
+ */
+$escape = $this->plugin('escapeHtml');
+$translate = $this->plugin('translate');
+$front = $this->AtlasEssay()->frontMatter($block->page());
+
+if (!$front['authors'] && $front['published'] === ''):
+    return;
+endif;
+?>
+<div class="atlas-essay-byline">
+    <dl>
+        <?php foreach ($front['authors'] as $author): ?>
+        <dt class="atlas-essay-author"><?php echo $escape($author['name']); ?></dt>
+        <dd class="atlas-essay-affiliation"><?php echo $escape($author['affiliation']); ?></dd>
+        <?php endforeach; ?>
+        <?php if ($front['published'] !== ''): ?>
+        <dt class="atlas-essay-published-label"><?php echo $escape($translate('Published')); ?></dt>
+        <dd class="atlas-essay-published"><?php echo $escape($front['published']); ?></dd>
+        <?php endif; ?>
+    </dl>
+</div>

@@ -1,0 +1,28 @@
+<?php
+/**
+ * Block template "Atlas essay" for HTML blocks: the running text of an essay.
+ * One continuous flow - the margin figures are floated out of it by the page,
+ * so the prose is never indented, stepped or interrupted beside one.
+ *
+ * Two transforms, both in view helpers so the block itself stays a plain HTML
+ * block:
+ *
+ * 1. The opening words of the essay are set in small caps - the FIRST
+ *    paragraph of the FIRST essay block on the page only. Write
+ *    <span class="atlas-essay-lede">...</span> yourself to choose the words.
+ *    See helper/AtlasEssay.php.
+ * 2. Citation tokens ({{guye1958}}, {{guye1958, 25}}, {{guye1958; rih1959}},
+ *    {{@guye1958}}) are substituted - see helper/AtlasBibkeys.php and
+ *    atlas-docs/06-theme-atlas.md. Add an "Atlas bibliography" block after the
+ *    prose and the citations become in-page links to it; without one they link
+ *    to the reference entry instead.
+ *
+ * The lede runs FIRST, on the author's own markup: after substitution the
+ * opening words may carry a citation link, and the small caps must not stop at
+ * it.
+ */
+$html = $this->AtlasEssay()->lede((string) $block->dataValue('html', ''));
+?>
+<div class="atlas-essay">
+    <?php echo $this->AtlasBibkeys()->essay($html, $block); ?>
+</div>

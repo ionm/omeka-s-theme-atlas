@@ -1,0 +1,67 @@
+<?php
+/**
+ * Atlas override of FacetedBrowse's results container: controls row (with the
+ * list/grid view toggle), entries, and an engraved empty state.
+ *
+ * The view is a query parameter on the browse request (?view=grid); anything
+ * else, or nothing, is the list. Sort and pagination preserve it on their own
+ * (queryToHiddenInputs and the pagination URLs reproduce the current query);
+ * facet changes rebuild the query from scratch in the module's JS, so
+ * asset/js/atlas.js re-appends the current view there (catalogue view logic).
+ *
+ * The toggle buttons are plain links whose href is the page URL carrying only
+ * the view parameter (shareable, works as a full-page load without the AJAX
+ * path), while data-browse-url carries the complete current browse query with
+ * the view swapped - that is what the JS fetches, so switching view keeps the
+ * current facets, sort and page.
+ *
+ * The permalink button moved to the bottom controls row: with the toggle on
+ * the top baseline (count | sort | view, per the browse views spec) all four
+ * groups no longer fit the results column, and a lone wrapped button reads
+ * as an accident.
+ */
+$escape = $this->plugin('escapeHtml');
+$placeholderSrc = $this->themeSettingAssetUrl('masthead_image');
+
+$view = ('grid' === $this->params()->fromQuery('view')) ? 'grid' : 'list';
+$queryBase = $this->params()->fromQuery();
+unset($queryBase['view']);
+$views = [
+    'list' => ['label' => $this->translate('List'), 'query' => $queryBase],
+    'grid' => ['label' => $this->translate('Grid'), 'query' => array_merge($queryBase, ['view' => 'grid'])],
+];
+// Permalink: the page URL, carrying the view when it is not the default.
+$permalinkUrl = $this->url(null, ['action' => 'page'], [
+    'query' => ('grid' === $view) ? ['view' => 'grid'] : [],
+    'force_canonical' => true,
+], true);
+?>
+<div class="browse-controls atlas-controls">
+    <?php echo $this->pagination(); ?>
+    <span class="atlas-controls-spacer"></span>
+    <?php echo $this->sortSelector($sortings); ?>
+    <?php if (!$columns): ?>
+    <div class="atlas-view-toggle" role="group" aria-label="<?php echo $escape($this->translate('View')); ?>">
+        <?php foreach ($views as $key => $viewConfig): ?>
+        <a href="<?php echo $escape($this->url(null, ['action' => 'page'], ['query' => ('grid' === $key) ? ['view' => 'grid'] : []], true)); ?>" data-view="<?php echo $key; ?>" data-browse-url="<?php echo $escape($this->url(null, [], ['query' => $viewConfig['query']], true)); ?>" role="button" aria-pressed="<?php echo ($view === $key) ? 'true' : 'false'; ?>"><?php echo $escape($viewConfig['label']); ?></a>
+        <?php endforeach; ?>
+    </div>
+    <?php endif; ?>
+</div>
+<?php if ($items): ?>
+<?php echo $this->partial($columns ? 'browse-items-columns' : 'browse-items-default'); ?>
+<?php else: ?>
+<div class="atlas-empty">
+    <?php if ($placeholderSrc): ?>
+    <img src="<?php echo $escape($placeholderSrc); ?>" alt="" role="presentation">
+    <?php endif; ?>
+    <p><?php echo $this->translate('No devices match the current filters.'); ?></p>
+</div>
+<?php endif; ?>
+<?php if ($items): ?>
+<div class="browse-controls atlas-controls is-bottom">
+    <?php echo $this->pagination(); ?>
+    <span class="atlas-controls-spacer"></span>
+    <a href="#" class="permalink atlas-button is-small" data-url="<?php echo $escape($permalinkUrl); ?>"><span class="default"><?php echo $this->translate('Copy permalink'); ?></span><span class="success"><?php echo $this->translate('Copied!'); ?></span></a>
+</div>
+<?php endif; ?>

@@ -1,0 +1,74 @@
+<?php
+/**
+ * Atlas override of FacetedBrowse's "Value" facet renderer.
+ *
+ * Same markup contract as the module's version (the module's JavaScript relies
+ * on .select-list / .select-list-item / input.value and the data-* attributes),
+ * plus an optional mono count after each value. Counts are computed against the
+ * category's own base query (e.g. Item Set = Clocks) and the current site; they
+ * are static with respect to the other facets.
+ */
+$escape = $this->plugin('escapeHtml');
+$showCounts = $this->themeSetting('facet_counts', '1') !== '0';
+$queryType = $facet->data('query_type');
+
+$countFor = null;
+if ($showCounts && !$textInput && !$singleSelect && in_array($queryType, ['eq', 'neq', 'in', 'nin', 'res', 'nres', 'ex', 'nex'])) {
+    parse_str((string) $facet->category()->query(), $baseQuery);
+    $baseQuery['site_id'] = $this->currentSite()->id();
+    $api = $this->api();
+    $countFor = function ($propertyId, $value) use ($api, $baseQuery, $queryType) {
+        $filter = ['property' => $propertyId, 'type' => $queryType];
+        if (!in_array($queryType, ['ex', 'nex'])) {
+            $filter['text'] = $value;
+        }
+        $query = $baseQuery;
+        $query['property'] = array_merge($query['property'] ?? [], [$filter]);
+        $query['per_page'] = 1;
+        try {
+            return $api->search('items', $query)->getTotalResults();
+        } catch (\Exception $e) {
+            return null;
+        }
+    };
+}
+?>
+<?php if ($textInput): ?>
+<?php echo $this->formElement($textInput); ?>
+<?php elseif ($singleSelect): ?>
+<span class="atlas-select"><?php echo $this->formElement($singleSelect); ?></span>
+<?php else: ?>
+<ul class="select-list" data-truncate-list-items="<?php echo $escape($facet->data('truncate_values')); ?>">
+    <?php $index = 0; ?>
+    <?php foreach ($values as $key => $value): ?>
+    <?php
+    $dataPropertyId = $facet->data('property_id');
+    $dataValue = $key;
+    if (in_array($queryType, ['ex', 'nex'])) {
+        $dataPropertyId = $key;
+    }
+    $count = $countFor ? $countFor($dataPropertyId, $dataValue) : null;
+    $itemClasses = ['select-list-item'];
+    if (0 === $count) {
+        $itemClasses[] = 'is-empty';
+    }
+    ?>
+    <li class="<?php echo implode(' ', $itemClasses); ?>" data-index="<?php echo $escape($index++); ?>">
+        <label>
+            <input
+                class="value"
+                type="<?php echo ('multiple_list' === $facet->data('select_type')) ? 'checkbox' : 'radio'; ?>"
+                name="<?php echo sprintf('value_%s', $facet->id()); ?>"
+                data-property-id="<?php echo $escape($dataPropertyId); ?>"
+                data-value="<?php echo $escape($dataValue); ?>">
+            <span class="atlas-facet-label"><?php echo $escape($value); ?></span>
+            <?php if ($count !== null): ?>
+            <span class="atlas-facet-count"><?php echo $escape($count); ?></span>
+            <?php endif; ?>
+        </label>
+    </li>
+    <?php endforeach; ?>
+</ul>
+<a href="#" class="select-list-expand" style="display: none;"><?php echo $this->translate('See more'); ?> <span class="select-list-hidden-count"></span></a>
+<a href="#" class="select-list-collapse" style="display: none;"><?php echo $this->translate('See less'); ?></a>
+<?php endif; ?>

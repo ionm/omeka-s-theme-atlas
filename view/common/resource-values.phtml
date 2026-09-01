@@ -1,0 +1,751 @@
+<?php
+/**
+ * Atlas override of core's resource-values partial.
+ *
+ * Two modes:
+ *
+ *  - Plain (every template not listed in the "section_templates" theme
+ *    setting): same output as core, plus per-property classes on each
+ *    .property block so the theme can style facet vocabularies as tags.
+ *
+ *  - Sectioned (Clock entries by default): the properties are regrouped under
+ *    chapter-like section headings, entirely through the admin - no PHP
+ *    editing needed for the common case:
+ *      1. HEADINGS AND ORDER: the resource template's property groups
+ *         (Advanced Resource Template module - resource template edit form,
+ *         "Template settings" tab, "Groups" field under "Display": "# Heading"
+ *         lines followed by property terms, one per line) when the template
+ *         defines any. The Clock template's groups are set this way as of
+ *         2026-08-30.
+ *      2. LABELS: each property's own "Alternate label", set per resource
+ *         template on the SAME edit form's "Properties" tab (a stock Omeka S
+ *         field, not specific to this theme or to ART) - e.g. Clock's
+ *         aclocks:fabricationsource -> "Fabrication type", bibo:uri ->
+ *         "Repository record". An alternate label set here ALWAYS beats the
+ *         theme's own "= Label" fallback below - the admin overrides the
+ *         theme, never the other way round.
+ *    Two fallbacks exist for cases the admin UI cannot reach:
+ *      a. the "entry_sections" theme setting (same "# Heading" / term-per-line
+ *         syntax, plus an optional " = Display label" suffix) stands in for
+ *         (1) when the template defines no groups, and its "= Label" suffixes
+ *         stand in for (2) for a term with no template property row at all, or
+ *         one whose alternate label is empty;
+ *      b. the built-in $defaultSections a few lines down stands in for (a)
+ *         when the theme setting is also empty - this is what rendered Clock
+ *         entries before groups were configured on the template, and remains
+ *         the bootstrap default for a fresh install.
+ *    Sections and rows without values are not rendered; properties that no
+ *    section lists are rendered as plain rows after the last section.
+ *
+ *    bibo:uri (the repository URI, mapped from Libra's dc.identifier.uri by
+ *    the DSpace Connector) IS on the Clock template as of 2026-08-30, with
+ *    alternate label "Repository record" and ART's "property_read_only" set
+ *    so the importer still writes it but nobody can hand-edit it in the form
+ *    (that flag renders the inputs readonly, not disabled, so values still
+ *    submit). The "= Repository record" line in $defaultSections is therefore
+ *    now only a bootstrap fallback for a template that has not been set up.
+ *
+ *    Section rules (generic, no per-item code):
+ *      - EVERY section you name keeps the heading you gave it, whatever it
+ *        contains. Sections with no values are dropped entirely;
+ *      - a section holding exactly one row whose label repeats the heading
+ *        verbatim ("REPOSITORY RECORD" over a row labelled "Repository
+ *        record") drops the row label, not the heading - two labels for one
+ *        thing reads as a mistake. Comparison ignores case and punctuation;
+ *      - a section whose properties are all citation properties (see the
+ *        "citation_properties" setting) gets a heading directly followed by
+ *        the citations, without a row label - e.g. "References";
+ *      - a heading containing no letters or digits ("# ", "# -", "# --") is an
+ *        explicit unlabelled section: its rows render under no heading. Use
+ *        distinct punctuation for several of them - group names are ARRAY KEYS
+ *        in the module that parses the field, so two groups sharing a name
+ *        (two blank "# " lines included) collide and the second silently
+ *        empties the first;
+ *      - properties in no section at all are appended after the last section
+ *        as plain rows under no heading (kind "is-plain").
+ *
+ *    Presentation-only transforms (stored values are never touched):
+ *      - properties listed in "lead_properties" (default dcterms:description)
+ *        render as a full-width serif lead under the title, in their own
+ *        section (NO heading - it is the entry's content, not a record value or
+ *        a section of the record; the hairline below still appears, via the
+ *        normal section-separator rule) rather than as a metadata row -
+ *        BUT only when no section lists the term. Put it in a group and
+ *        it is an ordinary row again (Clock entries do this);
+ *      - uri values of "external_link_properties" (default dcterms:source) get
+ *        the same named-link treatment as the repository record. The name comes
+ *        from the value's own stored label first (Omeka's native uri "o:label"),
+ *        and only falls back to the $repositoryHosts host map, then to the bare
+ *        hostname. Literal values (e.g. "Scanned from MIH") are untouched;
+ *      - dcterms:alternative is not listed here: show.phtml prints it under
+ *        the title ("Also known as: ...");
+ *      - dcterms:spatial holds two kinds of value on a Clock: the City copied
+ *        from the host institution by the DSpace Connector, and Libra's
+ *        dc.coverage.spatial ("current location", an institution). Values
+ *        equal to a linked host institution's own dcterms:spatial are shown
+ *        as City; the others as the virtual row "dcterms:spatial#institution"
+ *        (label hard-coded "Current institution" - it is not a real property,
+ *        so it has no template row and no alternate label to read). Wherever
+ *        a section lists "dcterms:spatial", this virtual row is automatically
+ *        placed right before it if any of its values exist - no need to list
+ *        the virtual term yourself, in ART groups or anywhere else. Without a
+ *        linked host institution nothing is split;
+ *      - dcterms:issued is hidden when its date already appears in a Status
+ *        history event, and shown with its normal label otherwise;
+ *      - URI values of the "repository_properties" (bibo:uri) are linked
+ *        under the repository's name, detected from the URI host, instead of
+ *        the raw URL.
+ *
+ * Original: application/view/common/resource-values.phtml
+ */
+$translate = $this->plugin('translate');
+$escape = $this->plugin('escapeHtml');
+
+$labelInfo = $this->fallbackSetting('property_label_information', ['site', 'global'], 'none');
+$showLocale = (bool) $this->fallbackSetting('show_locale_label', ['site'], true);
+$filterLocale = (bool) $this->fallbackSetting('filter_locale_values', ['site'], false);
+$showValueAnnotations = (bool) $this->fallbackSetting('show_value_annotations', ['site'], true);
+$lang = $this->lang();
+
+$filterLocaleCallback = function ($value) use ($lang) {
+    $valueLang = $value->lang();
+    return $valueLang == '' || strcasecmp($valueLang, $lang) === 0;
+};
+
+$listSetting = function ($name, $default) {
+    return array_values(array_filter(array_map('trim', explode(',', (string) $this->themeSetting($name, $default)))));
+};
+
+// Properties rendered as a full-width serif lead under the title instead of as
+// a metadata row - a Document's description is its content, not a record value.
+// Only applies when NO section lists the term: put dcterms:description in a
+// group and it stays an ordinary row (as on Clock entries); leave it out of
+// every group and it becomes the lead instead of falling to the unsectioned
+// rows at the bottom. The Groups field stays in charge either way.
+$leadTerms = $listSetting('lead_properties', 'dcterms:description');
+
+// Controlled vocabularies rendered as tags (see entry cards).
+$tagTerms = ['aclocks:devicetype', 'aclocks:operatingprinciple', 'aclocks:referencespecies'];
+
+// Properties whose linked resources are shown as a full bibliographic citation
+// instead of a bare title (Bibliography module). One citeproc render per value,
+// so results are cached per page in case a reference is cited twice.
+$citationTerms = $listSetting('citation_properties', 'dcterms:references');
+$citationTerms = $citationTerms && $this->getHelperPluginManager()->has('citation') ? $citationTerms : [];
+$citationCache = [];
+
+// A References block is a bibliography, and a bibliography is alphabetical.
+// Off restores the stored order (whatever order the DSpace Connector imported
+// the dcterms:references values in, which is Libra's field order).
+$citationSort = (bool) $this->themeSetting('citation_sort', true);
+
+// One citeproc render per distinct reference per page, cached: 'text' is the
+// bare string (used as the sort key), 'html' the same wrapped in a link to the
+// reference. Both come from ONE render - sorting must never cost a second pass.
+$citationOf = function ($valueResource) use (&$citationCache, $escape) {
+    $resourceId = $valueResource->id();
+    if (!array_key_exists($resourceId, $citationCache)) {
+        $rendered = trim((string) $this->citation($valueResource, ['bibliographic' => true, 'tag' => '']));
+        $citationCache[$resourceId] = $rendered === ''
+            ? ['text' => '', 'html' => null]
+            : [
+                'text' => $rendered,
+                'html' => '<a href="' . $escape($valueResource->siteUrl()) . '">' . $rendered . '</a>',
+            ];
+    }
+    return $citationCache[$resourceId];
+};
+
+// Sort key for one citation. chicago-author-date opens with the first author's
+// family name then the year, so the rendered string sorts as a bibliography
+// does - no parsing of authors or dates needed, and it follows the CSL style
+// automatically if that setting ever changes.
+$citationSortKey = function ($text) {
+    $text = html_entity_decode(strip_tags((string) $text), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+    // Leading punctuation (an anonymous work opening on a quoted title) would
+    // otherwise sort ahead of every author.
+    $text = preg_replace('~^[\p{P}\p{Z}]+~u', '', trim($text));
+    return (string) $text;
+};
+
+// Collator sorts accented names where a reader expects them (Kartaschoff and
+// Kärtaschoff together, "de Courtenay" under D). intl is not guaranteed on
+// every host, so fall back to a case-insensitive byte compare, which is right
+// for unaccented names and merely imperfect for the rest - never fatal.
+$citationCollator = class_exists('Collator') ? collator_create($lang ?: 'en') : null;
+$citationCompare = function ($a, $b) use ($citationCollator) {
+    if ($citationCollator) {
+        $result = $citationCollator->compare($a, $b);
+        if ($result !== false) {
+            return $result;
+        }
+    }
+    return strcasecmp($a, $b);
+};
+
+// URI properties rendered as a named link ("NIST Digital Archives" rather than
+// a 90-character URL). Two settings feed one mechanism: repository_properties
+// is the entry's own record in an institutional repository, external_link_properties
+// is any other outbound URI (dcterms:source on a Document, say). Only uri-typed
+// values are touched - a literal source such as "Scanned from MIH" is left alone.
+$repositoryTerms = $listSetting('repository_properties', 'bibo:uri');
+$namedLinkTerms = array_merge(
+    $repositoryTerms,
+    $listSetting('external_link_properties', 'dcterms:source'),
+    // Video links (1.8.0): the same named-link row; the plate badge and the
+    // "Play video" action live in common/atlas/specimen.phtml.
+    $listSetting('video_properties', 'foaf:page')
+);
+$repositoryHosts = [
+    'libra.unine.ch' => 'Libra, Université de Neuchâtel',
+    'boris.unibe.ch' => 'BORIS, Universität Bern',
+    'serval.unil.ch' => 'Serval, Université de Lausanne',
+    'archive-ouverte.unige.ch' => 'Archive ouverte, Université de Genève',
+    'zora.uzh.ch' => 'ZORA, Universität Zürich',
+    'research-collection.ethz.ch' => 'Research Collection, ETH Zürich',
+    'infoscience.epfl.ch' => 'Infoscience, EPFL',
+    'edoc.unibas.ch' => 'edoc, Universität Basel',
+    'folia.unifr.ch' => 'FOLIA, Université de Fribourg',
+    // Other sources cited by Documentation entries.
+    'nistdigitalarchives.contentdm.oclc.org' => 'NIST Digital Archives',
+    'www.nist.gov' => 'NIST',
+    'nist.gov' => 'NIST',
+];
+$repositoryLabel = function ($uri) use ($repositoryHosts) {
+    $host = strtolower((string) parse_url((string) $uri, PHP_URL_HOST));
+    if ($host === '') {
+        return null;
+    }
+    $bare = preg_replace('~^www\.~', '', $host);
+    return $repositoryHosts[$bare] ?? $repositoryHosts[$host] ?? $bare;
+};
+
+// ---------------------------------------------------------------------------
+// Sections: are they on for this resource, and where does the mapping live?
+// ---------------------------------------------------------------------------
+$resource = $resource ?? null;
+if (!$resource) {
+    foreach ($values as $propertyData) {
+        $firstValue = reset($propertyData['values']);
+        if ($firstValue) {
+            $resource = $firstValue->resource();
+        }
+        break;
+    }
+}
+$template = $resource ? $resource->resourceTemplate() : null;
+$templateLabel = $template ? (string) $template->label() : '';
+
+$sectioned = false;
+foreach ($listSetting('section_templates', 'Clock') as $candidate) {
+    if ($templateLabel !== '' && 0 === strcasecmp($candidate, $templateLabel)) {
+        $sectioned = true;
+        break;
+    }
+}
+
+/**
+ * Parse the "# Heading / term [= Label]" syntax into
+ * ['sections' => [heading => [term, ...]], 'labels' => [term => label]].
+ */
+$parseMapping = function ($text) {
+    $sections = [];
+    $labels = [];
+    $current = null;
+    foreach (preg_split('~\R~', (string) $text) as $line) {
+        $line = trim($line);
+        if ($line === '' || $line[0] === ';') {
+            continue;
+        }
+        if ($line[0] === '#') {
+            $current = trim(substr($line, 1));
+            if ($current !== '' && !isset($sections[$current])) {
+                $sections[$current] = [];
+            }
+            continue;
+        }
+        $term = $line;
+        if (strpos($line, '=') !== false) {
+            [$term, $label] = array_map('trim', explode('=', $line, 2));
+            if ($label !== '') {
+                $labels[$term] = $label;
+            }
+        }
+        if ($term !== '' && $current !== null) {
+            $sections[$current][] = $term;
+        }
+    }
+    return ['sections' => $sections, 'labels' => $labels];
+};
+
+// Bootstrap mapping: only used when the template defines no ART groups AND
+// the "entry_sections" theme setting is empty (see the file docblock). Plain
+// term lists, no "= Label" - once the Clock template carries real groups and
+// alternate labels (as of 2026-08-30), this text is not read for Clock at
+// all. bibo:uri keeps its label here because it has no template property row
+// to carry an alternate label (see docblock).
+$defaultSections = <<<'TXT'
+# Technical characteristics
+aclocks:devicetype
+aclocks:operatingprinciple
+aclocks:referencespecies
+aclocks:quantumtransition
+aclocks:referencefrequency
+aclocks:specifications
+
+# Development and history
+aclocks:fabricationsource
+dcterms:creator
+dcterms:contributor
+aclocks:statushistory
+dcterms:issued
+
+# Location and provenance
+aclocks:hostinstitution
+dcterms:spatial
+dcterms:coverage
+
+# Repository record
+bibo:uri = Repository record
+
+# References
+dcterms:references
+TXT;
+
+$sections = [];
+$labelOverrides = [];
+if ($sectioned) {
+    $mappingText = trim((string) $this->themeSetting('entry_sections', ''));
+    $mapping = $parseMapping($mappingText === '' ? $defaultSections : $mappingText);
+    $labelOverrides = $mapping['labels'];
+    // Advanced Resource Template groups on the template win over the theme
+    // setting: they are the one place an editor changes the grouping.
+    $templateGroups = $template && method_exists($template, 'dataValue') ? $template->dataValue('groups') : null;
+    if (is_array($templateGroups) && $templateGroups) {
+        foreach ($templateGroups as $heading => $terms) {
+            $sections[(string) $heading] = array_values(array_map('trim', (array) $terms));
+        }
+    } else {
+        $sections = $mapping['sections'];
+    }
+    if (!$sections) {
+        $sectioned = false;
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Rows: normalise $values (array or iterator) and apply the presentation-only
+// transforms when sectioned.
+// ---------------------------------------------------------------------------
+$rows = [];
+$leadRows = [];
+foreach ($values as $term => $propertyData) {
+    $propertyValues = $propertyData['values'];
+    if ($filterLocale) {
+        $propertyValues = array_filter($propertyValues, $filterLocaleCallback);
+    }
+    if (!$propertyValues) {
+        continue;
+    }
+    $propertyData['values'] = array_values($propertyValues);
+    // A Title row that only repeats the heading printed above it is two labels
+    // for one thing - the same reasoning as the "is-selflabelled" rule that
+    // stops "Repository record" printing its name twice. Values that DIFFER
+    // from the displayed title (a second title, another language) are kept, so
+    // this drops the duplicate without hiding real data. Applies in both modes:
+    // an Institution entry is where it shows, but nothing here is type-specific.
+    if ($term === 'dcterms:title' && $resource) {
+        $displayedTitle = trim((string) $resource->displayTitle());
+        if ($displayedTitle !== '') {
+            $keptTitles = [];
+            foreach ($propertyData['values'] as $titleValue) {
+                if (0 !== strcasecmp(trim((string) $titleValue->value()), $displayedTitle)) {
+                    $keptTitles[] = $titleValue;
+                }
+            }
+            if (!$keptTitles) {
+                continue;
+            }
+            $propertyData['values'] = $keptTitles;
+        }
+    }
+    $rows[] = ['term' => $term, 'data' => $propertyData, 'label' => null];
+}
+
+if ($sectioned) {
+    $byTerm = [];
+    foreach ($rows as $i => $row) {
+        $byTerm[$row['term']][] = $i;
+    }
+    $textsOf = function ($term) use ($rows, $byTerm) {
+        $texts = [];
+        foreach ($byTerm[$term] ?? [] as $i) {
+            foreach ($rows[$i]['data']['values'] as $value) {
+                $texts[] = trim((string) $value->value());
+            }
+        }
+        return $texts;
+    };
+
+    // Alternative title is printed under the entry title by show.phtml.
+    foreach ($byTerm['dcterms:alternative'] ?? [] as $i) {
+        unset($rows[$i]);
+    }
+
+    // Date issued: hide when the status history already records that date.
+    if (isset($byTerm['dcterms:issued']) && isset($byTerm['aclocks:statushistory'])) {
+        $history = implode("\n", $textsOf('aclocks:statushistory'));
+        foreach ($byTerm['dcterms:issued'] as $i) {
+            $kept = [];
+            foreach ($rows[$i]['data']['values'] as $value) {
+                $date = trim((string) $value->value());
+                if ($date === '' || strpos($history, $date) === false) {
+                    $kept[] = $value;
+                }
+            }
+            if ($kept) {
+                $rows[$i]['data']['values'] = $kept;
+            } else {
+                unset($rows[$i]);
+            }
+        }
+    }
+
+    // Spatial: split the host institution's city from the current location.
+    if (isset($byTerm['dcterms:spatial']) && isset($byTerm['aclocks:hostinstitution'])) {
+        $hostCities = [];
+        foreach ($byTerm['aclocks:hostinstitution'] as $i) {
+            foreach ($rows[$i]['data']['values'] as $value) {
+                $host = $value->valueResource();
+                if (!$host) {
+                    continue;
+                }
+                foreach ($host->value('dcterms:spatial', ['all' => true]) as $cityValue) {
+                    $hostCities[] = mb_strtolower(trim((string) $cityValue->value()));
+                }
+            }
+        }
+        if ($hostCities) {
+            foreach ($byTerm['dcterms:spatial'] as $i) {
+                $cities = [];
+                $institutions = [];
+                foreach ($rows[$i]['data']['values'] as $value) {
+                    $isCity = $value->valueResource()
+                        || in_array(mb_strtolower(trim((string) $value->value())), $hostCities, true);
+                    $isCity ? $cities[] = $value : $institutions[] = $value;
+                }
+                if ($institutions) {
+                    $institutionRow = $rows[$i];
+                    $institutionRow['term'] = 'dcterms:spatial#institution';
+                    $institutionRow['label'] = $translate('Current institution');
+                    $institutionRow['data']['values'] = $institutions;
+                    $rows[] = $institutionRow;
+                    if ($cities) {
+                        $rows[$i]['data']['values'] = $cities;
+                    } else {
+                        unset($rows[$i]);
+                    }
+                }
+            }
+        }
+    }
+    $rows = array_values($rows);
+
+    // Auto-place the virtual "Current institution" row: wherever a section
+    // lists "dcterms:spatial" (from ART groups, the theme setting, or the
+    // built-in default alike), slot the institution row right before it if
+    // the split above actually produced one. Keeps the virtual term out of
+    // every mapping surface - nobody has to know it exists to reorder or
+    // relabel City/Country.
+    $hasInstitutionRow = false;
+    foreach ($rows as $row) {
+        if ($row['term'] === 'dcterms:spatial#institution') {
+            $hasInstitutionRow = true;
+            break;
+        }
+    }
+    if ($hasInstitutionRow) {
+        foreach ($sections as $heading => &$terms) {
+            if (in_array('dcterms:spatial', $terms, true) && !in_array('dcterms:spatial#institution', $terms, true)) {
+                $expanded = [];
+                foreach ($terms as $term) {
+                    if ($term === 'dcterms:spatial') {
+                        $expanded[] = 'dcterms:spatial#institution';
+                    }
+                    $expanded[] = $term;
+                }
+                $terms = $expanded;
+            }
+        }
+        unset($terms);
+    }
+
+    // Pull the lead rows (see $leadTerms) out of the table, unless a section
+    // explicitly claims the term.
+    $sectionedTerms = [];
+    foreach ($sections as $terms) {
+        foreach ($terms as $term) {
+            $sectionedTerms[$term] = true;
+        }
+    }
+    foreach ($rows as $i => $row) {
+        if (in_array($row['term'], $leadTerms, true) && !isset($sectionedTerms[$row['term']])) {
+            $leadRows[] = $row;
+            unset($rows[$i]);
+        }
+    }
+    $rows = array_values($rows);
+}
+
+// ---------------------------------------------------------------------------
+// The label a row will display. Precedence: a row that hard-codes its own (the
+// virtual "Current institution"), then the ADMIN's per-template alternate
+// label, then the theme mapping's "= Label" fallback (for a term with no
+// template property row), then the property's own vocabulary label. The admin
+// must be able to override the theme, never the other way round.
+// ---------------------------------------------------------------------------
+$labelOf = function (array $row) use ($translate, $labelOverrides) {
+    $propertyData = $row['data'];
+    return $row['label']
+        ?? ($propertyData['alternate_label'] ?: null)
+        ?? (isset($labelOverrides[$row['term']]) ? $translate($labelOverrides[$row['term']]) : null)
+        ?? $translate($propertyData['property']->label());
+};
+
+// ---------------------------------------------------------------------------
+// One property block (dt + dd...), shared by both modes.
+// ---------------------------------------------------------------------------
+$renderRow = function (array $row, $showLabel = true) use ($labelOf, 
+    $escape, $translate, $labelInfo, $showLocale, $filterLocale, $showValueAnnotations, $lang,
+    $tagTerms, $citationTerms, $citationOf, $citationSort, $citationSortKey, $citationCompare,
+    $namedLinkTerms, $repositoryLabel
+) {
+    $term = $row['term'];
+    $baseTerm = explode('#', $term, 2)[0];
+    $propertyData = $row['data'];
+    $propertyValues = $propertyData['values'];
+    $property = $propertyData['property'];
+    $propertyLabel = $labelOf($row);
+    if ('term' === $labelInfo) {
+        $propertyTerm = $property->term();
+    } elseif ('vocab' === $labelInfo) {
+        $propertyTerm = $property->vocabulary()->label();
+    } else {
+        $propertyTerm = null;
+    }
+    $propertyClasses = ['property', 'atlas-prop-' . str_replace([':', '_', '#'], '-', $term)];
+    if (in_array($baseTerm, $tagTerms)) {
+        $propertyClasses[] = 'is-tags';
+    }
+    foreach ($propertyValues as $value) {
+        if ('literal' === $value->type() && mb_strlen((string) $value->value()) > 80) {
+            $propertyClasses[] = 'is-long';
+            break;
+        }
+    }
+
+    // Citation properties are ordered as a bibliography, not in the order the
+    // values happen to be stored. Sorting HERE covers both renderings at once:
+    // a "References" section (heading + bare citations) and an ordinary
+    // labelled row of citations elsewhere.
+    //
+    // The key is the rendered citation, so the order follows whatever CSL
+    // style is configured rather than a second, hand-rolled idea of author
+    // order. An unresolved citation key stayed a literal and sorts on its own
+    // text - it lands among the authors, which is a fair place for something
+    // that was meant to be one and did not resolve.
+    if ($citationSort && count($propertyValues) > 1 && in_array($baseTerm, $citationTerms, true)) {
+        $keyed = [];
+        foreach ($propertyValues as $i => $value) {
+            $valueResource = ('resource' == $value->type() || strpos($value->type(), 'resource') !== false)
+                ? $value->valueResource()
+                : null;
+            $text = $valueResource
+                ? $citationOf($valueResource)['text']
+                : (string) $value->value();
+            // $i breaks ties deterministically, so two identical citations keep
+            // the stored order instead of shuffling between page loads.
+            $keyed[] = ['key' => $citationSortKey($text), 'i' => $i, 'value' => $value];
+        }
+        usort($keyed, function ($a, $b) use ($citationCompare) {
+            $result = $citationCompare($a['key'], $b['key']);
+            return $result !== 0 ? $result : ($a['i'] <=> $b['i']);
+        });
+        $propertyValues = array_column($keyed, 'value');
+    }
+    ?>
+    <div class="<?php echo implode(' ', $propertyClasses); ?>">
+        <?php if ($showLabel): ?>
+        <dt>
+        <?php echo $escape($propertyLabel); ?>
+        <?php if ($propertyTerm !== null): ?>
+        <span class="field-term">(<?php echo $escape($propertyTerm); ?>)</span>
+        <?php endif; ?>
+        </dt>
+        <?php endif; ?>
+        <?php foreach ($propertyValues as $value): ?>
+        <?php
+        $valueType = $value->type();
+        $valueLang = $value->lang();
+        $valueAnnotation = $value->valueAnnotation();
+        $class = ['value'];
+        $valueCitation = null;
+        $repositoryLink = null;
+        if ('resource' == $valueType || strpos($valueType, 'resource') !== false) {
+            $class[] = 'resource';
+            $class[] = $escape($value->valueResource()->resourceName());
+            if (in_array($baseTerm, $citationTerms, true)) {
+                $valueCitation = $citationOf($value->valueResource())['html'];
+                if ($valueCitation !== null) {
+                    $class[] = 'is-citation';
+                }
+            }
+        } elseif ('uri' == $valueType) {
+            $class[] = 'uri';
+            if (in_array($baseTerm, $namedLinkTerms, true)) {
+                $uri = (string) $value->uri();
+                // A label stored ON the value (Omeka's native uri "o:label",
+                // which the DSpace Connector fills from a "Name | URL" source
+                // in Libra) always wins: it is editorial data. The host map is
+                // only the fallback for a bare URL.
+                $name = trim((string) $value->value());
+                if ($name === '') {
+                    $name = $repositoryLabel($uri);
+                }
+                if ($name !== null && $name !== '') {
+                    $repositoryLink = '<a class="atlas-external" href="' . $escape($uri) . '" target="_blank" rel="noopener">' . $escape($name) . '</a>';
+                    $class[] = 'is-repository';
+                }
+            }
+        } else {
+            $class[] = $escape(str_replace(['_', ':'], '-', $valueType));
+        }
+        ?>
+        <dd class="<?php echo implode(' ', $class); ?>" lang="<?php echo $escape($valueLang); ?>">
+            <?php if ($showLocale && $valueLang): ?>
+            <span class="language"><?php echo $valueLang; ?></span>
+            <?php endif; ?>
+            <?php
+            $facetUrl = (in_array($baseTerm, $tagTerms) && 'literal' === $valueType)
+                ? $this->AtlasFacetLinks()->url($baseTerm, (string) $value->value())
+                : null;
+            ?>
+            <?php if ($facetUrl): ?>
+            <span class="value-content"><a href="<?php echo $escape($facetUrl); ?>"><?php echo $escape($value->value()); ?></a></span>
+            <?php elseif ($valueCitation !== null): ?>
+            <span class="value-content"><?php echo $valueCitation; ?></span>
+            <?php elseif ($repositoryLink !== null): ?>
+            <span class="value-content"><?php echo $repositoryLink; ?></span>
+            <?php else: ?>
+            <span class="value-content"><?php echo $filterLocale ? $value->asHtml($lang) : $value->asHtml(); ?></span>
+            <?php endif; ?>
+            <?php if (!$value->isPublic()): ?>
+                <span class="o-icon-private" role="img" title="<?php echo $this->escapeHtml($translate('Private')); ?>" aria-label="<?php echo $this->escapeHtml($translate('Private')); ?>"></span>
+            <?php endif; ?>
+            <?php if ($valueAnnotation && $showValueAnnotations): ?>
+                <a href="#" class="<?php echo ('expanded' === $showValueAnnotations) ? 'collapse' : 'expand'; ?>" aria-label="<?php echo ('expanded' === $showValueAnnotations) ? $this->escapeHtml($translate('Collapse')) : $this->escapeHtml($translate('Expand')); ?>">
+                    <span class="has-annotation o-icon-annotation" role="img" title="<?php echo $this->escapeHtml($translate('Has annotation')); ?>" aria-label="<?php echo $this->escapeHtml($translate('Has annotation')); ?>"></span>
+                </a>
+                <div class="collapsible annotation">
+                    <?php echo $valueAnnotation->displayValues(); ?>
+                </div>
+            <?php endif; ?>
+            <?php $this->trigger('view.show.value', ['value' => $value]); ?>
+        </dd>
+        <?php endforeach; ?>
+    </div>
+    <?php
+};
+?>
+<?php if (!$rows && !$leadRows): ?>
+<?php return; endif; ?>
+<?php if (!$sectioned): ?>
+<dl>
+<?php foreach ($rows as $row) { $renderRow($row); } ?>
+</dl>
+<?php return; endif; ?>
+<?php
+// Sectioned: place each row in the first section that lists its term, in the
+// order the section lists them; leftovers keep their own order.
+$placed = [];
+$blocks = [];
+foreach ($sections as $heading => $terms) {
+    $sectionRows = [];
+    foreach ($terms as $term) {
+        foreach ($rows as $i => $row) {
+            if (!isset($placed[$i]) && $row['term'] === $term) {
+                $sectionRows[] = $row;
+                $placed[$i] = true;
+            }
+        }
+    }
+    if (!$sectionRows) {
+        continue;
+    }
+    $allCitations = (bool) $citationTerms;
+    foreach ($terms as $term) {
+        if (!in_array(explode('#', $term, 2)[0], $citationTerms, true)) {
+            $allCitations = false;
+            break;
+        }
+    }
+    // Every section you name keeps the heading you gave it. The only label
+    // that ever disappears is a row label that would repeat the heading
+    // verbatim ("REPOSITORY RECORD" over a row labelled "Repository record"),
+    // which reads as two labels for one thing.
+    $normalise = function ($text) {
+        return preg_replace('~[^a-z0-9]+~', '', mb_strtolower((string) $text));
+    };
+    if ($normalise($heading) === '') {
+        // A heading with no letters or digits ("# ", "# -", "# --") is an
+        // explicit request for an unlabelled section: rows, no heading.
+        // Distinct punctuation is how you get SEVERAL such sections - the
+        // group name is an array key, so two identically-named groups
+        // (two blank "# " lines included) collide and the later one wins,
+        // silently emptying the earlier. See atlas-docs/06.
+        $kind = 'is-plain';
+    } elseif ($allCitations) {
+        $kind = 'is-citations';
+    } else {
+        $kind = 'is-titled';
+        if (count($sectionRows) === 1
+            && $normalise($heading) === $normalise($labelOf($sectionRows[0]))
+        ) {
+            $kind .= ' is-selflabelled';
+        }
+    }
+    $blocks[] = ['heading' => $heading, 'kind' => $kind, 'rows' => $sectionRows];
+}
+$leftovers = [];
+foreach ($rows as $i => $row) {
+    if (!isset($placed[$i])) {
+        $leftovers[] = $row;
+    }
+}
+if ($leftovers) {
+    $blocks[] = ['heading' => '', 'kind' => 'is-plain', 'rows' => $leftovers];
+}
+?>
+<div class="atlas-sections">
+<?php foreach ($leadRows as $leadRow): ?>
+    <section class="atlas-section is-lead atlas-prop-<?php echo $escape(str_replace([':', '_', '#'], '-', $leadRow['term'])); ?>">
+        <div class="atlas-lead">
+            <?php foreach ($leadRow['data']['values'] as $leadValue): ?>
+            <div class="atlas-lead-value"><?php echo $filterLocale ? $leadValue->asHtml($lang) : $leadValue->asHtml(); ?></div>
+            <?php endforeach; ?>
+        </div>
+    </section>
+<?php endforeach; ?>
+<?php foreach ($blocks as $block): ?>
+    <?php $showLabels = false === strpos($block['kind'], 'is-citations')
+        && false === strpos($block['kind'], 'is-selflabelled'); ?>
+    <section class="atlas-section <?php echo $block['kind']; ?>">
+        <?php if ($block['kind'] !== 'is-plain'): ?>
+        <h3 class="atlas-section-heading"><?php echo $escape($translate($block['heading'])); ?></h3>
+        <?php endif; ?>
+        <dl>
+        <?php foreach ($block['rows'] as $row) { $renderRow($row, $showLabels); } ?>
+        </dl>
+    </section>
+<?php endforeach; ?>
+</div>

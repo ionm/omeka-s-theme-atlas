@@ -1,0 +1,140 @@
+<?php
+/**
+ * In-text citation: the author-date form, "(Guye 1958)".
+ *
+ * A theme-side alternative to the Bibliography module's common/citation.phtml,
+ * selected through that helper's own `template` option:
+ *
+ *   $this->citation($item, ['template' => 'common/atlas/citation-inline', 'tag' => ''])
+ *
+ * Same CSL style, same locale, same rdfToCsl() - so the in-text form inherits
+ * the fork's date and name patches and can never drift from the bibliography.
+ * The ONLY difference is citeproc's mode: 'citation' renders the style's
+ * <citation> layout instead of its <bibliography> layout.
+ *
+ * NOTE: citation mode returns a BARE string. Do not copy the module partial's
+ * `mb_substr($citation, 52, -13)` here - that strips the <div class="csl-bib-body">
+ * wrapper which only bibliography mode emits, and would eat the first 52
+ * characters of every citation.
+ *
+ * KNOWN GAP: citeproc-php does not disambiguate two works by the same author in
+ * the same year - both render "Kartaschoff 1958", with no 1958a / 1958b suffix.
+ * The bibliography does not add suffixes either, so the page is at least
+ * self-consistent, and each citation links to its own entry, so following it
+ * always lands on the right work. Documented in atlas-docs/06.
+ *
+ * @var \Omeka\Api\Representation\AbstractResourceEntityRepresentation $resource
+ * @var string $style
+ * @var string $locale
+ * @var array $defaults
+ * @var string $tag
+ *
+ * @uses \Bibliography\View\Helper\RdfToCsl
+ */
+
+$locale = $this->plugin('lang')();
+
+if (is_null($style) || $style === '') {
+    $style = 'chicago-author-date';
+}
+
+$csl = $this->rdfToCsl($resource, $defaults);
+
+/**
+ * Authorless works: shorten the title for the in-text form.
+ *
+ * chicago-author-date substitutes the title when a work has no author, and a
+ * lab's annual report has a title like "Dix ans de recherches et d'etudes dans
+ * le domaine des etalons de frequence atomique au LSRH (1956-1966)". Printed
+ * whole, mid-sentence, that is not a citation - it is a derailment. Chicago's
+ * own answer is a SHORTENED title, and the Atlas has a lot of authorless grey
+ * literature (annual reports, directors' reports, lab notes), so this is the
+ * common case, not an edge case.
+ *
+ * citeproc-php ignores the CSL `title-short` variable here - verified against
+ * chicago-author-date, which renders the full title with or without it - so the
+ * short form is swapped into `title` instead. The style then applies its own
+ * quoting and casing, and the swap cannot leak: this partial renders the
+ * IN-TEXT form only, and the bibliography goes through the module's own
+ * partial with the full title untouched. Exactly as in print.
+ *
+ * Source of the short title, in order:
+ *   1. bibo:shortTitle - which is where ZoteroImport puts Zotero's own
+ *      "Short Title" field. THIS IS THE FIX AT SOURCE: fill Short Title in
+ *      Zotero and re-import, the same way `language` is the fix for the
+ *      title-casing of French and German titles (atlas-docs/03).
+ *   2. failing that, a mechanical shortening - cut at the first colon or dash,
+ *      drop a trailing parenthetical, keep at most five words. No ellipsis:
+ *      Chicago does not use one in a shortened title.
+ */
+$cslAuthors = $csl->author ?? null;
+if (!is_array($cslAuthors) || !$cslAuthors) {
+    $shortTitle = trim((string) $resource->value('bibo:shortTitle'));
+
+    if ($shortTitle === '') {
+        $shortTitle = trim(strip_tags((string) ($csl->title ?? '')));
+        // A trailing parenthetical is a span or a qualifier, never the
+        // distinctive part: "... au LSRH (1956-1966)".
+        $shortTitle = trim(preg_replace('~\s*\([^()]*\)\s*$~u', '', $shortTitle));
+        // Cut at the first colon or dash: a subtitle is by definition the part
+        // a shortened title drops.
+        $shortTitle = preg_split('~\s*(?::|\s[-\x{2013}\x{2014}]\s)~u', $shortTitle)[0] ?? $shortTitle;
+        $words = preg_split('~\s+~u', trim($shortTitle), -1, PREG_SPLIT_NO_EMPTY) ?: [];
+        if (count($words) > 5) {
+            $words = array_slice($words, 0, 5);
+        }
+        $shortTitle = implode(' ', $words);
+    }
+
+    if ($shortTitle !== '') {
+        $csl->title = $shortTitle;
+        $csl->{'title-short'} = $shortTitle;
+    }
+}
+
+$citation = '';
+try {
+    $sheet = @\Seboettg\CiteProc\StyleSheet::loadStyleSheet($style);
+    $citeProc = new \Seboettg\CiteProc\CiteProc($sheet, $locale);
+    // CiteProc throws on incomplete metadata.
+    $citation = trim((string) @$citeProc->render([$csl], 'citation'));
+} catch (\Throwable $e) {
+    $citation = '';
+}
+
+if ($citation === '') {
+    // Fallback: first author's family name and the year, straight off the CSL
+    // array the module already built. No parsing, no second source of truth.
+    $get = function ($subject, $key) {
+        if (is_object($subject)) {
+            return $subject->$key ?? null;
+        }
+        return is_array($subject) ? ($subject[$key] ?? null) : null;
+    };
+
+    $family = '';
+    $authors = $get($csl, 'author');
+    if (is_array($authors) && $authors) {
+        $family = (string) ($get($authors[0], 'family') ?: $get($authors[0], 'literal'));
+        if (count($authors) > 2) {
+            $family .= ' et al.';
+        } elseif (count($authors) === 2) {
+            $second = (string) ($get($authors[1], 'family') ?: $get($authors[1], 'literal'));
+            $family .= $second === '' ? '' : ' and ' . $second;
+        }
+    }
+
+    $year = '';
+    $issued = $get($csl, 'issued');
+    $dateParts = $issued ? $get($issued, 'date-parts') : null;
+    if (is_array($dateParts) && isset($dateParts[0][0])) {
+        $year = (string) $dateParts[0][0];
+    }
+
+    $citation = trim($family . ' ' . $year);
+    if ($citation !== '') {
+        $citation = '(' . $citation . ')';
+    }
+}
+
+echo empty($tag) ? $citation : "<$tag class=\"citation\">$citation</$tag>";

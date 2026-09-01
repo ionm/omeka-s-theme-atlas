@@ -1,0 +1,28 @@
+<?php
+/**
+ * Block template "Atlas hero" for HTML blocks: the engraving, the block's own
+ * HTML (headline + lede, centred), and a primary button to the catalogue.
+ * The button label/target come from theme settings (empty label = no button).
+ */
+$escape = $this->plugin('escapeHtml');
+$engraving = $this->themeSettingAssetUrl('masthead_image');
+$buttonLabel = $this->themeSetting('hero_button_label', 'Browse the collection');
+$buttonUrl = trim((string) $this->themeSetting('back_link_url', ''));
+$site = $this->currentSite();
+if ($buttonUrl === '') {
+    $buttonUrl = $site->url() . '/faceted-browse/1';
+} elseif (!preg_match('~^(https?:)?/~', $buttonUrl)) {
+    $buttonUrl = $site->url() . '/' . ltrim($buttonUrl, '/');
+}
+?>
+<div class="atlas-hero">
+    <?php if ($engraving): ?>
+    <img class="atlas-hero-engraving" src="<?php echo $escape($engraving); ?>" alt="" role="presentation">
+    <?php endif; ?>
+    <div class="atlas-hero-text">
+        <?php echo $block->dataValue('html', ''); ?>
+    </div>
+    <?php if ($buttonLabel): ?>
+    <p class="atlas-hero-action"><a class="atlas-button is-primary" href="<?php echo $escape($buttonUrl); ?>"><?php echo $escape($buttonLabel); ?></a></p>
+    <?php endif; ?>
+</div>

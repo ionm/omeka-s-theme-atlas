@@ -1,0 +1,20 @@
+<?php
+$translate = $this->plugin('translate');
+$searchType = $this->siteSetting('search_type', 'sitewide');
+switch ($searchType) {
+    case 'cross-site':
+        $searchAction = $this->url('site/cross-site-search', ['action' => 'results'], true);
+        break;
+    case 'sitewide':
+    default:
+        $searchAction = $this->url('site/resource', ['controller' => 'index', 'action' => 'search'], true);
+}
+$searchValue = $this->escapeHtml($this->params()->fromQuery('fulltext_search', ''));
+?>
+<form action="<?php echo $this->escapeHtml($searchAction); ?>" id="search-form" class="atlas-search-form" aria-label="<?php echo $translate('Search'); ?>" role="search">
+    <label for="fulltext-search" class="atlas-label"><?php echo $translate('Search the Atlas'); ?></label>
+    <span class="atlas-search-row">
+        <input type="text" id="fulltext-search" name="fulltext_search" value="<?php echo $searchValue; ?>" placeholder="e.g. ammonia">
+        <button id="search-submit" type="submit" class="atlas-button"><?php echo $translate('Search'); ?></button>
+    </span>
+</form>

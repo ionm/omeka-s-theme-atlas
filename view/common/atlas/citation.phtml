@@ -1,0 +1,83 @@
+<?php
+/**
+ * "Cite this entry" / "Cite this essay" panel - one panel, two callers.
+ *
+ * Entry pages pass a $resource:
+ *
+ *   The Atomic Clock Atlas, "Title," accessed August 29, 2026, https://.../clocks/99857.
+ *
+ * Essay pages (view/omeka/site/page/show.phtml) pass $title, $permalink and
+ * $authors instead, because a site page is not a resource; the authors then
+ * open the citation and the Atlas becomes the container, which is the only
+ * difference in the string:
+ *
+ *   Marguerite Devaud and Henri Perret, "Title," The Atomic Clock Atlas, accessed ..., https://...
+ *
+ * Same markup, same class, same copy buttons either way - deliberately, so the
+ * two pages carry one panel and not two that drift apart.
+ *
+ * Variables: $resource OR ($title and $permalink); $authors, $label,
+ * $valueLang (all optional).
+ */
+$escape = $this->plugin('escapeHtml');
+$translate = $this->plugin('translate');
+$valueLang = $valueLang ?? null;
+$resource = $resource ?? null;
+$authors = trim((string) ($authors ?? ''));
+$label = $label ?? $translate('Cite this entry');
+
+if ($resource) {
+    // Only entries whose resource template is listed in the theme setting
+    // carry a citation panel: the Atlas's own descriptive work is citable;
+    // imported bibliographic records and source documents are cited from their
+    // originals. An empty setting shows the panel on every entry.
+    $citationTemplates = array_filter(array_map('trim', explode(',', (string) $this->themeSetting('citation_templates', 'Clock'))));
+    if ($citationTemplates) {
+        $resourceTemplate = $resource->resourceTemplate();
+        $templateLabel = $resourceTemplate ? (string) $resourceTemplate->label() : '';
+        $isCitable = false;
+        foreach ($citationTemplates as $candidate) {
+            if (0 === strcasecmp($candidate, $templateLabel)) {
+                $isCitable = true;
+                break;
+            }
+        }
+        if (!$isCitable) {
+            return;
+        }
+    }
+    $title = $resource->displayTitle(null, $valueLang);
+    $permalink = $resource->siteUrl(null, true);
+}
+
+$title = (string) ($title ?? '');
+$permalink = (string) ($permalink ?? '');
+if ($title === '' || $permalink === '') {
+    return;
+}
+
+$siteTitle = $this->themeSetting('citation_site_title', '') ?: $this->currentSite()->title();
+$accessed = date('F j, Y');
+
+// The citation string. Chicago keeps the comma INSIDE the closing quote in
+// both forms; only the order of author, title and container differs.
+$titleQuoted = '&ldquo;' . $escape($title) . ',&rdquo;';
+$siteEm = '<em>' . $escape($siteTitle) . '</em>';
+$citationHtml = $authors === ''
+    ? $siteEm . ', ' . $titleQuoted
+    : $escape($authors) . ', ' . $titleQuoted . ' ' . $siteEm . ',';
+
+// Plain-text version for the clipboard.
+$plain = $authors === ''
+    ? $siteTitle . ', “' . $title . ',” '
+    : $authors . ', “' . $title . ',” ' . $siteTitle . ', ';
+$plain .= $translate('accessed') . ' ' . $accessed . ', ' . $permalink . '.';
+?>
+<div class="atlas-citation">
+    <span class="atlas-label"><?php echo $escape($label); ?></span>
+    <p class="atlas-citation-text"><?php echo $citationHtml; ?> <?php echo $translate('accessed'); ?> <?php echo $escape($accessed); ?>, <a href="<?php echo $escape($permalink); ?>"><?php echo $escape($permalink); ?></a>.</p>
+    <div class="atlas-actions">
+        <button type="button" class="atlas-button is-small atlas-copy" data-copy="<?php echo $escape($plain); ?>" data-label="<?php echo $escape($translate('Copy citation')); ?>" data-done="<?php echo $escape($translate('Citation copied')); ?>"><?php echo $translate('Copy citation'); ?></button>
+        <button type="button" class="atlas-button is-small atlas-copy" data-copy="<?php echo $escape($permalink); ?>" data-label="<?php echo $escape($translate('Copy permalink')); ?>" data-done="<?php echo $escape($translate('Permalink copied')); ?>"><?php echo $translate('Copy permalink'); ?></button>
+    </div>
+</div>

@@ -1,0 +1,38 @@
+<?php
+$translate = $this->plugin('translate');
+$removeQueries = ['page', 'sort_by_default', 'sort_order_default'];
+if (isset($query['sort_by_default'])) {
+    $removeQueries[] = 'sort_by';
+}
+if (isset($query['sort_order_default'])) {
+    $removeQueries[] = 'sort_order';
+}
+?>
+<nav class="pagination atlas-pagination" aria-label="<?php echo $translate('Pagination'); ?>">
+<?php if ($totalCount): ?>
+    <form method="GET" action="" class="atlas-page-form">
+        <?php echo $this->queryToHiddenInputs($removeQueries); ?>
+        <input type="text" name="page" class="page-input-top" value="<?php echo $currentPage; ?>" size="2" <?php echo ($pageCount == 1) ? 'readonly' : ''; ?> aria-label="<?php echo $translate('Page'); ?>">
+        <span class="page-count"><?php echo sprintf($translate('of %s'), $pageCount); ?></span>
+    </form>
+    <span class="atlas-page-buttons">
+    <?php if ($currentPage != 1): ?>
+        <?php echo $this->hyperlink('‹', $previousPageUrl, ['class' => 'previous', 'title' => $translate('Previous'), 'aria-label' => $translate('Previous')]); ?>
+    <?php else: ?>
+        <span class="previous inactive" aria-hidden="true">‹</span>
+    <?php endif; ?>
+    <?php if ($currentPage < $pageCount): ?>
+        <?php echo $this->hyperlink('›', $nextPageUrl, ['class' => 'next', 'title' => $translate('Next'), 'aria-label' => $translate('Next')]); ?>
+    <?php else: ?>
+        <span class="next inactive" aria-hidden="true">›</span>
+    <?php endif; ?>
+    </span>
+    <?php
+    $from = $offset + 1;
+    $to = ($currentPage < $pageCount) ? $offset + $perPage : $totalCount;
+    ?>
+    <span class="row-count"><?php echo sprintf($translate('%1$s–%2$s of %3$s'), $from, $to, $totalCount); ?></span>
+<?php else: ?>
+    <span class="row-count"><?php echo $translate('0 results'); ?></span>
+<?php endif; ?>
+</nav>

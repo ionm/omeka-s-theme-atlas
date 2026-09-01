@@ -1,0 +1,8 @@
+<?php
+/**
+ * Atlas override of NumericDataTypes' facet select: same element, minus the
+ * module's inline "width: 90%", wrapped so the theme can draw its own glyph.
+ */
+$elementValues->removeAttribute('style');
+?>
+<span class="atlas-select"><?php echo $this->formSelect($elementValues); ?></span>
