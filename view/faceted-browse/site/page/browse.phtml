@@ -15,6 +15,20 @@
  * the view swapped - that is what the JS fetches, so switching view keeps the
  * current facets, sort and page.
  *
+ * COLUMNS ARE IGNORED HERE, deliberately. Faceted Browse renders a column
+ * table instead of its default listing as soon as a category defines any
+ * column, and it builds the Sort menu from those same columns - Omeka's own
+ * item sortings (Created, Resource class, Title) plus one entry per column. So
+ * a category that wants to offer "sort by Date" has to declare a Date column,
+ * and declaring it used to replace this catalogue with a one-column table and
+ * take the list/grid toggle away with it.
+ *
+ * The two things are not actually connected: $sortings is computed by the
+ * controller and passed in separately, so it keeps every option the columns
+ * contribute whether or not a column is ever drawn. This partial therefore
+ * always renders the entries. Add columns to a category purely to get their
+ * sort options; nothing in this theme will display them.
+ *
  * The permalink button moved to the bottom controls row: with the toggle on
  * the top baseline (count | sort | view, per the browse views spec) all four
  * groups no longer fit the results column, and a lone wrapped button reads
@@ -40,16 +54,14 @@ $permalinkUrl = $this->url(null, ['action' => 'page'], [
     <?php echo $this->pagination(); ?>
     <span class="atlas-controls-spacer"></span>
     <?php echo $this->sortSelector($sortings); ?>
-    <?php if (!$columns): ?>
     <div class="atlas-view-toggle" role="group" aria-label="<?php echo $escape($this->translate('View')); ?>">
         <?php foreach ($views as $key => $viewConfig): ?>
         <a href="<?php echo $escape($this->url(null, ['action' => 'page'], ['query' => ('grid' === $key) ? ['view' => 'grid'] : []], true)); ?>" data-view="<?php echo $key; ?>" data-browse-url="<?php echo $escape($this->url(null, [], ['query' => $viewConfig['query']], true)); ?>" role="button" aria-pressed="<?php echo ($view === $key) ? 'true' : 'false'; ?>"><?php echo $escape($viewConfig['label']); ?></a>
         <?php endforeach; ?>
     </div>
-    <?php endif; ?>
 </div>
 <?php if ($items): ?>
-<?php echo $this->partial($columns ? 'browse-items-columns' : 'browse-items-default'); ?>
+<?php echo $this->partial('browse-items-default'); ?>
 <?php else: ?>
 <div class="atlas-empty">
     <?php if ($placeholderSrc): ?>
