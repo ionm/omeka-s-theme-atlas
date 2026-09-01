@@ -481,10 +481,33 @@ $labelOf = function (array $row) use ($translate, $labelOverrides) {
         ?? $translate($propertyData['property']->label());
 };
 
+// The explanation shown when a label is hovered or focused. Same precedence as
+// the label above, and for the same reason: the ADMIN's per-template comment
+// (resource template -> Properties tab -> Comment) wins, then the property's
+// own vocabulary comment (Vocabularies -> the property -> rdfs:comment).
+//
+// The split matters because several rows here borrow a Dublin Core property
+// and relabel it. "Date" is dcterms:issued, whose vocabulary comment reads
+// "Date of formal issuance (e.g., publication) of the resource" - true of the
+// property, useless about a clock. Those need a template comment. The aclocks
+// terms were written for this project and read correctly from the vocabulary
+// with nothing to add.
+//
+// No comment anywhere means no tooltip: a label with nothing useful to say
+// should not advertise that it has something to say.
+$commentOf = function (array $row) use ($translate) {
+    $propertyData = $row['data'];
+    $comment = trim((string) ($propertyData['alternate_comment'] ?? ''));
+    if ($comment === '') {
+        $comment = trim((string) ($propertyData['property']->comment() ?? ''));
+    }
+    return $comment === '' ? '' : $translate($comment);
+};
+
 // ---------------------------------------------------------------------------
 // One property block (dt + dd...), shared by both modes.
 // ---------------------------------------------------------------------------
-$renderRow = function (array $row, $showLabel = true) use ($labelOf, 
+$renderRow = function (array $row, $showLabel = true) use ($labelOf, $commentOf, 
     $escape, $translate, $labelInfo, $showLocale, $filterLocale, $showValueAnnotations, $lang,
     $tagTerms, $citationTerms, $citationOf, $citationSort, $citationSortKey, $citationCompare,
     $namedLinkTerms, $repositoryLabel
@@ -545,8 +568,24 @@ $renderRow = function (array $row, $showLabel = true) use ($labelOf,
     ?>
     <div class="<?php echo implode(' ', $propertyClasses); ?>">
         <?php if ($showLabel): ?>
+        <?php
+        // tabindex + aria-describedby rather than a title attribute: a title is
+        // invisible to the keyboard, does nothing on touch, and is announced
+        // inconsistently. This shows on hover AND focus, and is read out as the
+        // label's description.
+        $propertyComment = $commentOf($row);
+        $tipId = '';
+        if ($propertyComment !== '') {
+            static $tipSeq = 0;
+            $tipId = 'atlas-tip-' . (++$tipSeq);
+        }
+        ?>
         <dt>
+        <?php if ($propertyComment !== ''): ?>
+        <span class="atlas-term" tabindex="0" aria-describedby="<?php echo $escape($tipId); ?>"><?php echo $escape($propertyLabel); ?><span class="atlas-tip" role="tooltip" id="<?php echo $escape($tipId); ?>"><?php echo $escape($propertyComment); ?></span></span>
+        <?php else: ?>
         <?php echo $escape($propertyLabel); ?>
+        <?php endif; ?>
         <?php if ($propertyTerm !== null): ?>
         <span class="field-term">(<?php echo $escape($propertyTerm); ?>)</span>
         <?php endif; ?>

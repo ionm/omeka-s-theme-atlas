@@ -1574,6 +1574,63 @@ input[type="radio"]:focus-visible, input[type="checkbox"]:focus-visible { outlin
   font-size: var(--text-label); letter-spacing: var(--tracking-caps); color: var(--ink-2);
 }
 
+/* --------------------------------------------------------------------------
+   Field explanations.
+
+   A metadata label is a compressed technical term - "Reference frequency",
+   "Fabrication type" - and a reader has no way to expand it. The explanation
+   comes from the resource template's Comment or the property's vocabulary
+   comment (see resource-values.phtml); this is only how it is shown.
+
+   Hover AND focus, because the trigger carries tabindex="0": a tooltip a
+   keyboard cannot reach is a tooltip half the readers never see, and on a
+   touch screen focus is the only way in. The label itself stays the label -
+   no icon, no marker beyond a dotted rule, so a page of these does not turn
+   into a page of decoration.
+   -------------------------------------------------------------------------- */
+.atlas-term {
+  position: relative;
+  cursor: help;
+  border-bottom: 1px dotted var(--ink-3);
+}
+.atlas-term:focus-visible { outline: 2px solid var(--oxblood); outline-offset: 2px; }
+.atlas-tip {
+  position: absolute;
+  left: 0;
+  top: calc(100% + 8px);
+  z-index: 30;
+  width: max-content;
+  max-width: 260px;
+  padding: 8px 10px;
+  background: var(--ink);
+  color: var(--paper);
+  /* The dt sets uppercase, tracking and weight for the label; the explanation
+     is prose and must not inherit any of it. */
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.45;
+  letter-spacing: 0;
+  text-transform: none;
+  text-align: left;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity var(--transition), visibility var(--transition);
+  pointer-events: none;
+}
+.atlas-term:hover .atlas-tip,
+.atlas-term:focus .atlas-tip,
+.atlas-term:focus-visible .atlas-tip { opacity: 1; visibility: visible; }
+/* Narrow screens: the label column is ~112px, so a tooltip anchored to its
+   left edge would run off the right of the screen. Span the viewport instead. */
+@media (max-width: 56em) {
+  .atlas-tip { max-width: min(260px, calc(100vw - 48px)); }
+}
+@media print {
+  .atlas-tip { display: none; }
+  .atlas-term { border-bottom: 0; }
+}
+
 /* Running text. No measure cap: the text runs the full width to the page edge,
    which is the line the margin column buys. */
 .atlas-essay-page .block-html,
