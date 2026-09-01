@@ -90,8 +90,6 @@
  *        placed right before it if any of its values exist - no need to list
  *        the virtual term yourself, in ART groups or anywhere else. Without a
  *        linked host institution nothing is split;
- *      - dcterms:issued is hidden when its date already appears in a Status
- *        history event, and shown with its normal label otherwise;
  *      - URI values of the "repository_properties" (bibo:uri) are linked
  *        under the repository's name, detected from the URI host, instead of
  *        the raw URL.
@@ -377,38 +375,9 @@ if ($sectioned) {
     foreach ($rows as $i => $row) {
         $byTerm[$row['term']][] = $i;
     }
-    $textsOf = function ($term) use ($rows, $byTerm) {
-        $texts = [];
-        foreach ($byTerm[$term] ?? [] as $i) {
-            foreach ($rows[$i]['data']['values'] as $value) {
-                $texts[] = trim((string) $value->value());
-            }
-        }
-        return $texts;
-    };
-
     // Alternative title is printed under the entry title by show.phtml.
     foreach ($byTerm['dcterms:alternative'] ?? [] as $i) {
         unset($rows[$i]);
-    }
-
-    // Date issued: hide when the status history already records that date.
-    if (isset($byTerm['dcterms:issued']) && isset($byTerm['aclocks:statushistory'])) {
-        $history = implode("\n", $textsOf('aclocks:statushistory'));
-        foreach ($byTerm['dcterms:issued'] as $i) {
-            $kept = [];
-            foreach ($rows[$i]['data']['values'] as $value) {
-                $date = trim((string) $value->value());
-                if ($date === '' || strpos($history, $date) === false) {
-                    $kept[] = $value;
-                }
-            }
-            if ($kept) {
-                $rows[$i]['data']['values'] = $kept;
-            } else {
-                unset($rows[$i]);
-            }
-        }
     }
 
     // Spatial: split the host institution's city from the current location.
