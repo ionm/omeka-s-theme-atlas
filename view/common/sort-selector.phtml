@@ -1,6 +1,31 @@
 <?php
+/**
+ * Atlas override of the sort selector.
+ *
+ * Sort options a reader cannot make sense of are dropped here rather than at
+ * each call site, because this partial draws every sort menu in the theme.
+ *
+ * "Resource class" is an Omeka data-model term - the class an item was
+ * catalogued as - and it is not something a visitor to a catalogue of clocks
+ * has any use for, or any way to interpret the resulting order. It comes from
+ * Omeka's own sort defaults for public item browsing, which are global
+ * configuration rather than a site setting, so the theme cannot decline it
+ * upstream and removes it on the way out instead.
+ *
+ * An option that is CURRENTLY selected is kept even if listed here, so a menu
+ * never hides the order the page is actually in - an old link that still sorts
+ * by a removed option shows it, rather than claiming to be sorted by whatever
+ * happens to be first.
+ */
 $translate = $this->plugin('translate');
 $escape = $this->plugin('escapeHtml');
+
+$hiddenSorts = ['resource_class_label'];
+$sortConfig = array_filter(
+    $sortConfig,
+    fn ($sortBy) => !in_array($sortBy, $hiddenSorts, true) || $sortBy === $sortByQuery,
+    ARRAY_FILTER_USE_KEY
+);
 ?>
 <form class="sorting atlas-sorting" action="">
     <?php echo $this->queryToHiddenInputs(['sort_by', 'sort_order', 'sort_by_default', 'sort_order_default']); ?>
