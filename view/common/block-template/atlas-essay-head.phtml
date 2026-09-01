@@ -22,14 +22,23 @@ if (!$front['authors'] && $front['published'] === ''):
 endif;
 ?>
 <div class="atlas-essay-byline">
-    <dl>
+    <?php if ($front['authors']): ?>
+    <dl class="atlas-essay-authors">
         <?php foreach ($front['authors'] as $author): ?>
         <dt class="atlas-essay-author"><?php echo $escape($author['name']); ?></dt>
         <dd class="atlas-essay-affiliation"><?php echo $escape($author['affiliation']); ?></dd>
         <?php endforeach; ?>
-        <?php if ($front['published'] !== ''): ?>
+    </dl>
+    <?php endif; ?>
+    <?php if ($front['published'] !== ''): ?>
+    <?php /* A list of its own, not another row of the one above, so the rule
+             between the authors and the dateline can span the full width. A
+             border on a dt and a dd would break across the 20px column gap,
+             and both lists share the same fixed label column, so the two grids
+             stay in step. */ ?>
+    <dl class="atlas-essay-dateline">
         <dt class="atlas-essay-published-label"><?php echo $escape($translate('Published')); ?></dt>
         <dd class="atlas-essay-published"><?php echo $escape($front['published']); ?></dd>
-        <?php endif; ?>
     </dl>
+    <?php endif; ?>
 </div>

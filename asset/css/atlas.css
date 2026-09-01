@@ -1541,11 +1541,20 @@ input[type="radio"]:focus-visible, input[type="checkbox"]:focus-visible { outlin
   margin: 0 0 var(--space-5);
 }
 
-/* Byline: the entry pages' metadata proportions, one row per author. */
+/* Byline: the entry pages' metadata proportions, one row per author.
+
+   The hairline sits between the authors and the dateline, not between the
+   title and the byline (Ion's call, 1.13.1): it separates who wrote this from
+   when it was published, rather than fencing the whole block off from its own
+   title. That is why the authors and the dateline are two lists - a border on
+   a dt plus a dd would break across the column gap, while a list can carry a
+   rule the full width. Both use the same fixed label column, so they align. */
 .atlas-essay-byline {
+  margin: 0 0 var(--space-7);
+}
+.atlas-essay-dateline {
   border-top: var(--border-hairline);
   padding-top: var(--space-4);
-  margin: 0 0 var(--space-7);
 }
 .atlas-essay-byline dl {
   display: grid;
