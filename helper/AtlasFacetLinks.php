@@ -60,6 +60,25 @@ class AtlasFacetLinks extends AbstractHelper
         return $this->pageUrl . '#' . rawurlencode(json_encode($state, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
     }
 
+    /**
+     * First Faceted Browse page id in a site's navigation tree, or null.
+     */
+    protected function navigationPageId(array $nav): ?int
+    {
+        foreach ($nav as $item) {
+            if (($item['type'] ?? null) === 'facetedBrowse' && !empty($item['data']['page_id'])) {
+                return (int) $item['data']['page_id'];
+            }
+            if (!empty($item['links']) && is_array($item['links'])) {
+                $found = $this->navigationPageId($item['links']);
+                if ($found) {
+                    return $found;
+                }
+            }
+        }
+        return null;
+    }
+
     protected function load(): void
     {
         if ($this->loaded) {
@@ -77,13 +96,20 @@ class AtlasFacetLinks extends AbstractHelper
             $page = null;
             $backUrl = (string) $view->themeSetting('back_link_url', '');
             if (preg_match('~faceted-browse/(\d+)~', $backUrl, $m)) {
-                $page = $view->api()->read('faceted_browse_pages', (int) $m[1])->getContent();
+                $pageId = (int) $m[1];
             } else {
-                $pages = $view->api()->search('faceted_browse_pages', [
-                    'site_id' => $site->id(),
-                    'per_page' => 1,
-                ])->getContent();
-                $page = $pages ? $pages[0] : null;
+                // The site's navigation, not a search. Faceted Browse grants
+                // an anonymous visitor "read" on its pages but NOT "search"
+                // (its Module.php ACL), so searching here threw for everyone
+                // who was not logged in - the exception was caught below and
+                // every tag quietly degraded to a plain browse link. The
+                // effect was invisible while testing signed in, and complete
+                // for actual readers. Navigation is public, and a Faceted
+                // Browse entry in it carries the page id.
+                $pageId = $this->navigationPageId($site->navigation());
+            }
+            if ($pageId) {
+                $page = $view->api()->read('faceted_browse_pages', $pageId)->getContent();
             }
             if (!$page) {
                 return;
