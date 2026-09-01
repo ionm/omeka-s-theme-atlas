@@ -1041,7 +1041,25 @@ input[type="radio"]:focus-visible, input[type="checkbox"]:focus-visible { outlin
   .atlas-entry { grid-template-columns: 1fr; gap: var(--space-3); padding: var(--space-4) 0; }
   .atlas-entry .atlas-plate { max-width: 200px; }
   .atlas-entries.is-grid .atlas-plate { max-width: none; }
-  .atlas-show-blocks dl, .atlas-item-set-blocks dl { grid-template-columns: 1fr; }
+  /* Narrow screens keep the two columns and let the LABEL wrap - "HOST
+     INSTITUTION" over two lines - rather than dropping the value below it.
+     The label column must be sized by the viewport, never by content.
+     Asking for one column (grid-template-columns: 1fr) does not work: the
+     second and subsequent values of a property are pinned to column 2 by the
+     "dd + dd" rule above, so the grid grows an IMPLICIT second column sized
+     to ITS content, and the 1fr label column takes what is left. The result is
+     still two columns, but each section is measured against its own longest
+     value - three sections of one record came out at 106px, 163px and 108px,
+     and only properties with a single value stacked. That mismatch between
+     neighbouring sections is what reads as broken alignment on a phone.
+     A percentage with a floor holds every section to the same width and
+     scales: 112px at 375px, ~170px at 820px, meeting the 200px of the desktop
+     rule as it reaches the breakpoint. A fixed width cannot do both - 120px
+     wraps nine of seventeen labels at 820px, where there is 636px to spare. */
+  .atlas-show-blocks dl, .atlas-item-set-blocks dl {
+    grid-template-columns: minmax(112px, 22%) minmax(0, 1fr);
+    column-gap: 16px;
+  }
   .atlas-show-blocks dd { margin-bottom: 8px; }
   .atlas-entry-grid { grid-template-columns: 1fr; gap: var(--space-6); }
   /* Stacked, the aside falls above the record. That is right when it opens
@@ -1363,7 +1381,11 @@ input[type="radio"]:focus-visible, input[type="checkbox"]:focus-visible { outlin
 .atlas-section.is-citations dd:not(.is-citation) { display: block; margin: 0 0 var(--space-2); }
 
 @media (max-width: 56em) {
-  .atlas-sections dl { grid-template-columns: 1fr; }
+  /* Same label column as the block rule above - see the note there. */
+  .atlas-sections dl {
+    grid-template-columns: minmax(112px, 22%) minmax(0, 1fr);
+    column-gap: 16px;
+  }
   .atlas-sections dt { margin-bottom: 4px; }
   .atlas-sections dd { margin-bottom: 0; }
   .atlas-section + .atlas-section { padding-top: var(--space-5); margin-top: var(--space-5); }
