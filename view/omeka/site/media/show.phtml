@@ -13,16 +13,43 @@ $valueLang = $filterLocale ? [$this->lang(), ''] : null;
 $blocks = $this->resourcePageBlocks($media)->getBlocksArray();
 $renderBlock = $blocks['mediaRender'] ?? null;
 unset($blocks['mediaRender']);
+
+// IIIF images (1.14.1): core renders them with OpenSeadragon, a viewer whose
+// whole point is room to zoom, so it is not put on the 380px specimen plate.
+// The viewer takes the full page width above the metadata (single-column
+// grid, as an entry with no aside), and the plate's own height rule is
+// overridden in CSS (.atlas-media-viewer). This is where the HI RES badge on
+// a specimen plate leads when JavaScript is off; with JavaScript the badge
+// opens the same viewer inside the lightbox (see ?viewer=1 below).
+$isIiifViewer = 'iiif' === $media->renderer();
+
+// ?viewer=1: the same OpenSeadragon viewer alone, in the bare layout
+// (layout/viewer.phtml). This is what the lightbox on the specimen plates
+// loads as an iframe slide, so the deep zoom opens without leaving the page.
+if ($isIiifViewer && $this->params()->fromQuery('viewer')) {
+    $this->layout('layout/viewer');
+    $this->headTitle($media->displayTitle(null, $valueLang));
+    echo $media->render();
+    return;
+}
 ?>
-<article class="atlas-page atlas-entry-page">
+<article class="atlas-page atlas-entry-page<?php echo $isIiifViewer ? ' has-no-specimen has-no-aside is-iiif-viewer' : ''; ?>">
     <p class="atlas-back"><a href="<?php echo $escape($item->siteUrl()); ?>">‹ <?php echo $escape(sprintf($translate('Back to %s'), $item->displayTitle(null, $valueLang))); ?></a></p>
+    <?php if ($isIiifViewer): ?>
+    <figure class="atlas-plate is-primary atlas-media-viewer">
+        <?php echo $renderBlock ?: $media->render(); ?>
+        <figcaption><?php echo $escape($media->displayTitle(null, $valueLang)); ?></figcaption>
+    </figure>
+    <?php endif; ?>
     <div class="atlas-entry-grid">
+        <?php if (!$isIiifViewer): ?>
         <div class="atlas-entry-specimen">
             <figure class="atlas-plate is-primary">
                 <?php echo $renderBlock ?: $media->render(); ?>
                 <figcaption><?php echo $escape($media->displayTitle(null, $valueLang)); ?></figcaption>
             </figure>
         </div>
+        <?php endif; ?>
         <div class="atlas-entry-main">
             <?php echo $this->pageTitle($media->displayTitle(null, $valueLang), 2); ?>
             <?php $this->trigger('view.show.before'); ?>

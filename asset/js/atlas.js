@@ -304,6 +304,20 @@
                 speed: 160,
                 backdropDuration: 160
             });
+            // IIIF plates (1.14.1): the HI RES badge opens the plate's lightbox
+            // slide - the OpenSeadragon viewer in an iframe - instead of
+            // following its no-JS fallback link to the media page.
+            var badges = specimen.querySelectorAll('.atlas-plate.is-iiif .atlas-plate-badge');
+            for (var b = 0; b < badges.length; b++) {
+                badges[b].addEventListener('click', function (event) {
+                    var figure = this.parentNode;
+                    var link = figure ? figure.querySelector('.atlas-specimen-link') : null;
+                    if (link) {
+                        event.preventDefault();
+                        link.click();
+                    }
+                });
+            }
         }
     }
 })();

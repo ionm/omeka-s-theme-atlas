@@ -5,6 +5,9 @@
  * lightGallery popup (core's vendored copy) — nothing is embedded inline.
  *
  * Variables: $item, $valueLang (optional).
+ *
+ * IIIF images (1.14.1): the lightbox slide is an iframe with the media page
+ * in viewer mode (OpenSeadragon); a HI RES badge marks the plate.
  */
 $escape = $this->plugin('escapeHtml');
 $translate = $this->plugin('translate');
@@ -162,9 +165,33 @@ $videoHrefOf = function ($owner) use ($videoTerms) {
         $subHtml = rtrim($subHtml);
         $subHtml = substr($subHtml, 0, -4) . ' &middot; <a href="' . $escape($videoHref) . '" target="_blank" rel="noopener">' . $escape($translate('Play video')) . '</a></p>';
     }
+    // IIIF images (1.14.1). The plate shows the stored derivative like any
+    // other image, but that derivative is capped at the "large" constraint,
+    // so the lightbox zoom had nothing beyond 2000px to show. For a media
+    // whose renderer is "iiif" the lightbox slide is therefore not an image
+    // but an IFRAME (lightGallery core supports data-iframe) showing the
+    // media page in viewer mode - core's OpenSeadragon viewer alone, in the
+    // bare layout/viewer.phtml - so the deep zoom opens on the same page,
+    // inside the lightbox, prev/next and thumbnails intact. The badge does
+    // NOT say ZOOM: every plate zooms in the lightbox, so that would have
+    // named the thing they share instead of the thing this one adds. It says
+    // HI RES, which is what the reader actually gets - detail far beyond the
+    // stored derivative - and "IIIF" names the standard in the title
+    // attribute, where it reaches the readers it means something to without
+    // taxing the ones it does not. atlas.js turns a click on the badge into
+    // opening that slide; without JS it falls back to the media page.
+    $isIiif = !$isPdf && 'iiif' === $display->renderer();
+    $lightboxSrc = $large;
+    $lightboxIframe = false;
+    $zoomHref = null;
+    if ($isIiif) {
+        $zoomHref = $display->siteUrl();
+        $lightboxSrc = $zoomHref . (strpos($zoomHref, '?') === false ? '?' : '&') . 'viewer=1';
+        $lightboxIframe = true;
+    }
     ?>
-    <figure class="atlas-plate <?php echo $i === 0 ? 'is-primary' : 'is-secondary'; ?><?php echo $isPdf ? ' is-pdf' : ''; ?><?php echo $videoHref ? ' is-video' : ''; ?>">
-        <a class="atlas-specimen-link" href="<?php echo $escape($large); ?>" data-src="<?php echo $escape($large); ?>" data-thumb="<?php echo $escape($medium); ?>" data-sub-html="<?php echo $escape($subHtml); ?>">
+    <figure class="atlas-plate <?php echo $i === 0 ? 'is-primary' : 'is-secondary'; ?><?php echo $isPdf ? ' is-pdf' : ''; ?><?php echo $videoHref ? ' is-video' : ''; ?><?php echo $isIiif ? ' is-iiif' : ''; ?>">
+        <a class="atlas-specimen-link" href="<?php echo $escape($lightboxIframe ? $zoomHref : $lightboxSrc); ?>" data-src="<?php echo $escape($lightboxSrc); ?>"<?php echo $lightboxIframe ? ' data-iframe="true"' : ''; ?> data-thumb="<?php echo $escape($medium); ?>" data-sub-html="<?php echo $escape($subHtml); ?>">
             <img src="<?php echo $escape($i === 0 ? $large : $medium); ?>" alt="<?php echo $escape($alt); ?>"<?php echo $i === 0 ? '' : ' loading="lazy"'; ?>>
         </a>
         <?php if ($isPdf): ?>
@@ -172,6 +199,9 @@ $videoHrefOf = function ($owner) use ($videoTerms) {
         <?php endif; ?>
         <?php if ($videoHref): ?>
         <a class="atlas-plate-badge" href="<?php echo $escape($videoHref); ?>" target="_blank" rel="noopener" title="<?php echo $escape($translate('Play the video')); ?>">VIDEO</a>
+        <?php endif; ?>
+        <?php if ($zoomHref): ?>
+        <a class="atlas-plate-badge" href="<?php echo $escape($zoomHref); ?>" title="<?php echo $escape($translate('Open the IIIF high-resolution viewer')); ?>">HI RES</a>
         <?php endif; ?>
         <?php
         // The "Play video" action sits in the caption, visible without opening

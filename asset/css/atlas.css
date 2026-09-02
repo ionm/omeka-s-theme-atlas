@@ -1272,8 +1272,10 @@ input[type="radio"]:focus-visible, input[type="checkbox"]:focus-visible { outlin
 
 
 /* PDF plates: page-1 image joins the lightbox; the badge opens the document.
-   Video plates (1.8.0): the still joins the lightbox; the badge plays the film. */
-.atlas-plate.is-pdf, .atlas-plate.is-video { position: relative; }
+   Video plates (1.8.0): the still joins the lightbox; the badge plays the film.
+   IIIF plates (1.14.1): the lightbox slide is an iframe with the media page in
+   viewer mode (OpenSeadragon); the badge opens that slide. */
+.atlas-plate.is-pdf, .atlas-plate.is-video, .atlas-plate.is-iiif { position: relative; }
 .atlas-plate-badge {
   position: absolute; top: 8px; right: 8px; z-index: 2;
   font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.08em;
@@ -1281,6 +1283,10 @@ input[type="radio"]:focus-visible, input[type="checkbox"]:focus-visible { outlin
   padding: 2px 7px; opacity: 0.85; text-decoration: none;
 }
 .atlas-plate-badge:hover { background: var(--oxblood); opacity: 1; color: var(--paper); text-decoration: none; }
+/* IIIF media page (1.14.1): OpenSeadragon on a full-width plate above the
+   metadata. The renderer inlines height: 400px, hence the !important. */
+.atlas-media-viewer { margin: 0 0 var(--space-6); }
+.atlas-media-viewer .openseadragon { height: 72vh !important; min-height: 360px; background: var(--ink); }
 /* Video plates (1.8.0): the VIDEO badge is the PDF chip verbatim; the verb
    lives in the caption as a small sans action with a play glyph, set off from
    the caption text by a middle dot so it never reads as part of the title.

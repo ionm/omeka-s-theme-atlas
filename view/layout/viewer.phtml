@@ -1,0 +1,33 @@
+<?php
+/**
+ * Bare layout for the IIIF viewer frame (1.14.1): no masthead, no footer,
+ * no theme CSS - just the media's OpenSeadragon viewer filling the frame.
+ * Selected by omeka/site/media/show.phtml when the request carries
+ * ?viewer=1; common/atlas/specimen.phtml loads that URL as an iframe slide
+ * of the lightGallery lightbox, so the deep zoom opens on the same page as
+ * the plates. Not a page a reader lands on: noindex.
+ */
+$this->htmlElement('html')->setAttribute('lang', $this->lang());
+$this->headMeta()->setCharset('utf-8');
+$this->headMeta()->appendName('viewport', 'width=device-width, initial-scale=1');
+$this->headMeta()->appendName('robots', 'noindex');
+?>
+<?php echo $this->doctype(); ?>
+<?php echo $this->htmlElement('html'); ?>
+    <head>
+        <?php echo $this->headMeta(); ?>
+        <?php echo $this->headTitle(); ?>
+        <?php echo $this->headLink(); ?>
+        <?php echo $this->headStyle(); ?>
+        <style>
+            html, body { margin: 0; background: #221e19; overflow: hidden; }
+            /* Viewport units, not percentages: inside lightGallery's iframe the
+               body has no definite height for a percentage to resolve against. */
+            .openseadragon { width: 100vw; height: 100vh !important; }
+        </style>
+        <?php echo $this->headScript(); ?>
+    </head>
+    <body class="atlas-viewer-frame">
+        <?php echo $this->content; ?>
+    </body>
+</html>
