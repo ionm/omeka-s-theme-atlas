@@ -41,6 +41,24 @@ foreach ([1, 2] as $i) {
         <?php echo $this->headMeta(); ?>
         <?php echo $this->headTitle(); ?>
         <?php echo $this->headLink(); ?>
+        <?php
+        // Favicon (1.15.0): shipped with the theme, not uploaded as an Omeka
+        // asset. Assets live in files/ and the database and do not deploy;
+        // a theme file travels with the tag, and assetUrl() versions it. The
+        // SVG (the burst in paper on an oxblood square, so it carries its own
+        // contrast on any tab) is taken by Chromium and Firefox; Safari takes
+        // no SVG favicon at all, hence the PNGs; iOS home screens take the
+        // 180px touch icon; Safari's pinned tabs take the mask icon, the
+        // burst alone as a silhouette, coloured by the attribute. Leave the
+        // Favicon setting empty in Settings and
+        // in Site settings: core prepends its own <link rel="icon"> whenever
+        // either holds an asset, and there would be two.
+        ?>
+        <link rel="icon" type="image/svg+xml" href="<?php echo $escape($this->assetUrl('img/favicon.svg')); ?>">
+        <link rel="icon" type="image/png" sizes="32x32" href="<?php echo $escape($this->assetUrl('img/favicon-32.png')); ?>">
+        <link rel="icon" type="image/png" sizes="16x16" href="<?php echo $escape($this->assetUrl('img/favicon-16.png')); ?>">
+        <link rel="apple-touch-icon" sizes="180x180" href="<?php echo $escape($this->assetUrl('img/apple-touch-icon.png')); ?>">
+        <link rel="mask-icon" href="<?php echo $escape($this->assetUrl('img/favicon-mask.svg')); ?>" color="#7d2b26">
         <?php echo $this->headStyle(); ?>
         <?php echo $this->headScript(); ?>
     </head>
