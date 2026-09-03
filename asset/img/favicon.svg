@@ -1,3 +1,22 @@
-<svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg"><rect width="32" height="32" fill="#7d2b26"></rect>
-  <g transform="translate(16,16) scale(0.8) translate(-16,-16)"><path d="M 16 1 Q 17.34 12.77 26.61 5.39 Q 19.23 14.66 31 16 Q 19.23 17.34 26.61 26.61 Q 17.34 19.23 16 31 Q 14.66 19.23 5.39 26.61 Q 12.77 17.34 1 16 Q 12.77 14.66 5.39 5.39 Q 14.66 12.77 16 1 Z" fill="#faf8f3"></path></g>
+<svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+  <!-- One icon, two states, chosen by the viewer's colour scheme (Chromium and
+       Firefox honour this inside a favicon; Safari takes the PNGs instead).
+       Light tabs: the burst alone, oxblood (atlas-d-light). Dark tabs: the
+       burst in paper on its oxblood field (atlas-d-field). -->
+  <style>
+    .dark { display: none; }
+    @media (prefers-color-scheme: dark) {
+      .light { display: none; }
+      .dark { display: inline; }
+    }
+  </style>
+  <g class="light">
+    <path d="M 16.00 1.00 Q 17.34 12.77 26.61 5.39 Q 19.23 14.66 31.00 16.00 Q 19.23 17.34 26.61 26.61 Q 17.34 19.23 16.00 31.00 Q 14.66 19.23 5.39 26.61 Q 12.77 17.34 1.00 16.00 Q 12.77 14.66 5.39 5.39 Q 14.66 12.77 16.00 1.00 Z" fill="#7d2b26"/>
+  </g>
+  <g class="dark">
+    <rect width="32" height="32" fill="#7d2b26"/>
+    <g transform="translate(16,16) scale(0.8) translate(-16,-16)">
+      <path d="M 16.00 1.00 Q 17.34 12.77 26.61 5.39 Q 19.23 14.66 31.00 16.00 Q 19.23 17.34 26.61 26.61 Q 17.34 19.23 16.00 31.00 Q 14.66 19.23 5.39 26.61 Q 12.77 17.34 1.00 16.00 Q 12.77 14.66 5.39 5.39 Q 14.66 12.77 16.00 1.00 Z" fill="#faf8f3"/>
+    </g>
+  </g>
 </svg>

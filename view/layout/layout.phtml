@@ -45,8 +45,9 @@ foreach ([1, 2] as $i) {
         // Favicon (1.15.0): shipped with the theme, not uploaded as an Omeka
         // asset. Assets live in files/ and the database and do not deploy;
         // a theme file travels with the tag, and assetUrl() versions it. The
-        // SVG (the burst in paper on an oxblood square, so it carries its own
-        // contrast on any tab) is taken by Chromium and Firefox; Safari takes
+        // SVG adapts to the viewer's colour scheme (the burst alone in oxblood
+        // on light, in paper on an oxblood field on dark) and is taken by
+        // Chromium and Firefox; Safari takes
         // no SVG favicon at all, hence the PNGs; iOS home screens take the
         // 180px touch icon; Safari's pinned tabs take the mask icon, the
         // burst alone as a silhouette, coloured by the attribute. Leave the
