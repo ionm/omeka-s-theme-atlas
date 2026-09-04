@@ -1842,3 +1842,20 @@ input[type="radio"]:focus-visible, input[type="checkbox"]:focus-visible { outlin
   body.is-atlas-essay .atlas-plate figcaption a,
   body.is-atlas-essay .atlas-bibliography-entry a { color: var(--oxblood); }
 }
+
+/* ── KaTeX in essays (1.16.1) ────────────────────────────────────────────
+   KaTeX ships ".katex { font-size: 1.21em }", which against the essay's
+   19px EB Garamond renders maths at 23px: visibly larger and darker than
+   the paragraph it sits in. 1.05em keeps a little of the presence a
+   displayed equation wants without shouting. Scoped to the essay article,
+   the only place KaTeX loads, and specific enough to beat the library's
+   own rule whatever order the stylesheets arrive in.
+
+   The FACE is deliberately left alone. KaTeX positions fractions, radicals
+   and delimiters using Computer Modern's metrics; swapping the family for
+   EB Garamond moves glyphs off the rules drawn for them, and a quantity
+   set in prose (thin spaces, a text plus-minus) integrates better than any
+   half-restyled maths font would. Set quantities without structure as
+   prose; reserve KaTeX for expressions that have some. */
+.atlas-essay-page .katex { font-size: 1.05em; }
+
