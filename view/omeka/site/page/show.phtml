@@ -44,6 +44,41 @@ if ($isEssay) {
     // an entry page, and .atlas-navbar is outside the article, so an
     // ancestor class on <body> is the only handle.
     $this->htmlElement('body')->appendAttribute('class', 'is-atlas-essay');
+
+    // LaTeX in essay prose (1.16.0). KaTeX is bundled under asset/katex -
+    // no CDN, for the reason the fonts are self-hosted: a GPLv3 theme that
+    // asks nothing of a third party on page view. Loaded HERE rather than in
+    // the layout, so the catalogue carries none of its 600 KB.
+    //
+    // auto-render.min.js only DEFINES renderMathInElement; nothing calls it,
+    // and a missing call fails silently - stylesheet loaded, script loaded,
+    // no maths and no error. Hence the inline call below, on
+    // DOMContentLoaded because the prose it walks is further down the page.
+    //
+    // Delimiters are \( \) inline and $$ $$ or \[ \] displayed. Single $
+    // is deliberately NOT a delimiter: this is prose about instruments that
+    // cost money, and "$40 … $50" would render as maths. throwOnError keeps
+    // a mistyped formula as red source text instead of taking the page down.
+    $this->headLink()->appendStylesheet($this->assetUrl('katex/katex.min.css'));
+    $this->headScript()->appendFile($this->assetUrl('katex/katex.min.js'));
+    $this->headScript()->appendFile($this->assetUrl('katex/auto-render.min.js'));
+    $this->headScript()->appendScript(<<<'JS'
+document.addEventListener('DOMContentLoaded', function () {
+    if (typeof renderMathInElement !== 'function') {
+        return;
+    }
+    var scope = document.querySelector('.atlas-essay-page') || document.body;
+    renderMathInElement(scope, {
+        delimiters: [
+            {left: '$$', right: '$$', display: true},
+            {left: '\\[', right: '\\]', display: true},
+            {left: '\\(', right: '\\)', display: false}
+        ],
+        throwOnError: false
+    });
+});
+JS);
+
     $front = $essay->frontMatter($page);
     $pdfUrl = $essay->pdfUrl($page);
 
